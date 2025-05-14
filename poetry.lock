@@ -617,6 +617,17 @@ files = [
 ]
 
 [[package]]
+name = "rcr"
+version = "2.4.7"
+description = "Advanced, but easy to use outlier rejection."
+optional = false
+python-versions = "*"
+files = [
+    {file = "rcr-2.4.7-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:b2bba4644fc0a62032ae96d137ca15ac885f628081378326aa6dda198c7c5b12"},
+    {file = "rcr-2.4.7.tar.gz", hash = "sha256:933fc88b1c75a4958aa734e913fa41d0c93e5100210b39a8c89f0d75e398ae92"},
+]
+
+[[package]]
 name = "scipy"
 version = "1.15.3"
 description = "Fundamental algorithms for scientific computing in Python"
@@ -778,4 +789,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "5cec105dccb9e4fd8fe4eab03ffe2a2cedd5ec762a468676b50f0685676198a0"
+content-hash = "610f782b3339233b7d09e1435676a16f5704463b26f5a326acc7e2a67878ba6c"
