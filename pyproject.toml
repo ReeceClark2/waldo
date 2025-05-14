@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "mike"
+version = "0.1.0"
+description = ""
+authors = ["ReeceClark2 <reececlark55@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+numpy = "^2.2.5"
+matplotlib = "^3.10.3"
+pandas = "^2.2.3"
+datetime = "^5.5"
+scipy = "^1.15.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
