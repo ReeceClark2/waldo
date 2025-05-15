@@ -91,14 +91,14 @@ def graph(xxs: dict, yys: dict):
     plt.savefig("polarization_all_channels.png")
 
 # with fits.open("C:/Users/starb/Downloads/0136645.fits") as hdul:
-with fits.open("C:/Users/starb/Downloads/0130688.fits") as hdul:
+with fits.open("C:/Users/starb/Downloads/0136645.fits") as hdul:
     header = hdul[0].header
     data = hdul[1].data
 
 
 
-non_cal, cal = split_calibration(data)
-x_pol, y_pol = split_polarity(non_cal)
+non_cal, cal = split_calibration(data[1:])
+x_pol, y_pol = split_polarity(data[5:])
 
 xxs = split_slp(x_pol)
 yys = split_slp(y_pol)

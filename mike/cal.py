@@ -21,8 +21,8 @@ class Cal:
 
         self.file = file
 
-        if self.file.validated_header == False:
-            raise MyException('FITS header has not been validated!')
+        # if self.file.validated_header == False:
+        #     raise MyException('FITS header has not been validated!')
         # if self.file.validated_data == False:
         #     raise MyException('FITS data has not been validated!')
 
@@ -62,7 +62,7 @@ class Cal:
         else:
             cal_list.append(chunk)
 
-        print(len(cal_list[0]), len(cal_list[1]))
+        print((cal_list[0]), (cal_list[1]))
         return non_cal_list, cal_list
     
 
@@ -117,7 +117,7 @@ class Cal:
         result = linregress(x, y)
         m = result.slope
         b = result.intercept
-
+        print('x', x, 'y', y)
         guess = [m, b]
         model = rcr.FunctionalForm(self.linear,
             x,
@@ -133,7 +133,7 @@ class Cal:
         best_fit_parameters = model.result.parameters
 
         plt.scatter(x, y, color='black')
-        x = np.linspace(x[0], x[-1], 1000)
+        x = np.linspace(x[0], 230, 1000)
         y = m * x + b
         plt.plot(x, y, label='Pre RCR', color='red')
 
@@ -154,7 +154,9 @@ class Cal:
 
         data, cal = self.split_calibration()
 
-        x_pol, y_pol = self.split_polarity(cal[0])
+        use = np.concatenate((cal[0], cal[1]))
+
+        x_pol, y_pol = self.split_polarity(use)
         xxs = self.split_slp(x_pol)
         yys = self.split_slp(y_pol)
 
@@ -165,7 +167,7 @@ class Cal:
             xx = xxs[key]
             xx_freq = self.integrate(xx, axis=1)
 
-            times_xx = [datetime.fromisoformat(t) for t in xx["DATE-OBS"]]
+            times_xx = [datetime.fromisoformat(t.decode("utf-8")) for t in xx["DATE-OBS"]]
             t0 = times_xx[0]
             time_xx = [(t - t0).total_seconds() for t in times_xx]
 
@@ -178,7 +180,7 @@ class Cal:
             yy = yys[key]
             yy_freq = self.integrate(yy, axis=1)
 
-            times_yy = [datetime.fromisoformat(t) for t in yy["DATE-OBS"]]
+            times_yy = [datetime.fromisoformat(t.decode("utf-8")) for t in yy["DATE-OBS"]]
             t0 = times_yy[0]
             time_yy = [(t - t0).total_seconds() for t in times_yy]
 
@@ -198,13 +200,14 @@ class Cal:
         new_xxs = []
         new_yys = []
         
-        plt.scatter(xxs_cal[0][0][1:],xxs_cal[0][1][1:])
-        plt.savefig('test cal')
+        # plt.scatter(xxs_cal[0][0][1:],xxs_cal[0][1][1:])
+        # plt.savefig('test cal')
 
-        values = self.rcr(xxs_cal[0][0], xxs_cal[0][1])
-        new_xxs.append(values[0])
+        print(len(xxs_cal))
+        values = self.rcr(xxs_cal[0][1], xxs_cal[0][0])
+        values = self.rcr(yys_cal[0][1], yys_cal[0][0])
 
-        print(len(xxs_cal[0]), len(new_xxs[0]))
+        return
         
 
 if __name__ == "__main__":
@@ -212,7 +215,7 @@ if __name__ == "__main__":
 
     file = Mike("C:/Users/starb/Downloads/0136645.fits")
     v = Val(file)
-    v.validate_primary_header()
+    # v.validate_primary_header()
     # v.validate_data()
 
     c = Cal(file)
