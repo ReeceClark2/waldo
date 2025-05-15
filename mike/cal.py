@@ -1,6 +1,7 @@
 from astropy.io import fits
 from scipy.special import erfc
 from scipy.ndimage import label
+from scipy.stats import linregress
 import numpy as np
 from file_exception import MyException
 from datetime import datetime
@@ -22,8 +23,8 @@ class Cal:
 
         if self.file.validated_header == False:
             raise MyException('FITS header has not been validated!')
-        if self.file.validated_data == False:
-            raise MyException('FITS data has not been validated!')
+        # if self.file.validated_data == False:
+        #     raise MyException('FITS data has not been validated!')
 
 
     def split_calibration(self):
@@ -96,35 +97,62 @@ class Cal:
         return channel_means
     
 
-    def rcr(self, data, x):
+    def linear(self, x, params): # model function
+        return params[0] + x * params[1]
+
+
+    def d_linear_1(self, x, params): # first model parameter derivative
+        return 1
+
+
+    def d_linear_2(self, x, params): # second model parameter derivative
+        return x
+
+
+    def rcr(self, x, y):
         """Perform Robust Chauvenet Rejection on a given dataset."""
+        x = x[1:]
+        y = y[1:]
 
-        r = rcr.RCR(rcr.LS_MODE_68)
-        r.performBulkRejection(data.tolist())
+        result = linregress(x, y)
+        m = result.slope
+        b = result.intercept
 
-        cleaned_data = r.result.cleanY
-        cleaned_mu = r.result.mu
-        cleaned_sigma = r.result.stDev
+        guess = [m, b]
+        model = rcr.FunctionalForm(self.linear,
+            x,
+            y,
+            [self.d_linear_1, self.d_linear_2],
+            guess
+        )
 
-        mask = r.result.indices
-        cleaned_time = x[mask]
-        cleaned_freq = np.array(r.result.cleanY)
+        r = rcr.RCR(rcr.LS_MODE_68) 
+        r.setParametricModel(model)
+        r.performBulkRejection(y)
 
-        plt.scatter(x[1:], data[1:])
-        plt.scatter(cleaned_time[1:], cleaned_data[1:])
-        plt.savefig("temporary.png")
+        best_fit_parameters = model.result.parameters
 
+        plt.scatter(x, y, color='black')
+        x = np.linspace(x[0], x[-1], 1000)
+        y = m * x + b
+        plt.plot(x, y, label='Pre RCR', color='red')
 
-        return (cleaned_data, cleaned_mu, cleaned_sigma)
+        print('Best fit parameters:', best_fit_parameters)
+        b = best_fit_parameters[0]
+        m = best_fit_parameters[1]
+        y = m * x + b
+        plt.plot(x, y, label='Post RCR', color='green')
+
+        plt.legend()
+        plt.savefig('RCR Fit')
+
+        return
 
 
     def sdfits_to_array(self):
         """Convert SDFITS data to arrays to be used by RCR."""
 
         data, cal = self.split_calibration()
-
-        off = file.data[file.data["CALSTATE"] == 1]
-        on = file.data[file.data["CALSTATE"] == -1]
 
         x_pol, y_pol = self.split_polarity(cal[0])
         xxs = self.split_slp(x_pol)
@@ -144,7 +172,7 @@ class Cal:
             xx_freq = np.array(xx_freq)
             time_xx = np.array(time_xx)
 
-            xxs_cal.append(xx_freq)
+            xxs_cal.append([xx_freq, time_xx])
 
         for i, key in enumerate(yys):
             yy = yys[key]
@@ -157,34 +185,35 @@ class Cal:
             yy_freq = np.array(yy_freq)
             time_yy = np.array(time_yy)
 
-            yys_cal.append(yy_freq)
+            yys_cal.append([yy_freq, time_yy])
 
-        return xxs_cal, yys_cal, time_xx
+        return xxs_cal, yys_cal
     
 
     def clean_data(self):
         """Clean data of outliers via RCR post extracting values from SDFITS file. Remove outliers from original data."""
         
-        xxs_cal, yys_cal, time_xx = self.sdfits_to_array()
+        xxs_cal, yys_cal = self.sdfits_to_array()
 
         new_xxs = []
         new_yys = []
         
-        for i in xxs_cal:
-            values = self.rcr(i, time_xx)
-            new_xxs.append(values[0])
+        plt.scatter(xxs_cal[0][0][1:],xxs_cal[0][1][1:])
+        plt.savefig('test cal')
 
-        # for i, j in zip(xxs_cal[0], new_xxs[0]):
-        #     print(i, j)
+        values = self.rcr(xxs_cal[0][0], xxs_cal[0][1])
+        new_xxs.append(values[0])
 
         print(len(xxs_cal[0]), len(new_xxs[0]))
         
 
 if __name__ == "__main__":
+    '''Test function to implement calibration.'''
+
     file = Mike("C:/Users/starb/Downloads/0136645.fits")
     v = Val(file)
     v.validate_primary_header()
-    v.validate_data()
+    # v.validate_data()
 
     c = Cal(file)
     c.clean_data()

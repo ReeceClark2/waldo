@@ -205,6 +205,8 @@ class Val:
     
 
 if __name__ == "__main__":
+    '''Test function to implement validation.'''
+
     file = Mike("ONOFF.fits")
     v = Val(file)
     #v.validate_primary_header()

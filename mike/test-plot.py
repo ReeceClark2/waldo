@@ -43,11 +43,11 @@ def graph(xxs: dict, yys: dict):
     fig, axs = plt.subplots(n, 2, figsize=(10, 4 * n))
 
     if n == 1:
-        axs = np.expand_dims(axs, axis=0)  # Ensure axs[i][j] works when n=1
+        axs = np.expand_dims(axs, axis=0) 
 
     for i, key in enumerate(xxs):
         xx = xxs[key]
-        yy = yys.get(key, None)  # Some channels might not have Y pol
+        yy = yys.get(key, None) 
 
         # Integrate across frequency (to get time series)
         xx_freq = integrate(xx, axis=1)
@@ -100,7 +100,7 @@ with fits.open("C:/Users/starb/Downloads/0130688.fits") as hdul:
 non_cal, cal = split_calibration(data)
 x_pol, y_pol = split_polarity(non_cal)
 
-xxs = split_slp(cal)
+xxs = split_slp(x_pol)
 yys = split_slp(y_pol)
 
 
