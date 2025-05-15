@@ -1,34 +1,68 @@
 from astropy.io import fits
 from scipy.special import erfc
+from scipy.ndimage import label
 import numpy as np
 from file_exception import MyException
-import warnings
-from mike import Mike
 from datetime import datetime
+import rcr
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from file_init import Mike
+from val import Val
+
+
 class Cal:
     def __init__(self, file):
-        self.cal = None
-        self.no_cal = None
+        '''Initialize file and confirm header and data have been validated.'''
+
         self.file = file
 
         if self.file.validated_header == False:
             raise MyException('FITS header has not been validated!')
-        # if self.file.validated_data == False:
-        #     raise MyException('FITS data has not been validated!')
+        if self.file.validated_data == False:
+            raise MyException('FITS data has not been validated!')
 
 
     def split_calibration(self):
-        """Split data into calibration and non-calibration sets based on CAL (-1, 1 = cal, 0 = no cal)."""
+        """
+        Split data into alternating calibration and non-calibration sets.
+        Each contiguous calibration (CALSTATE == ±1) or science (CALSTATE == 0) block becomes a separate element in the returned lists.
+        Returns:
+            non_cal_list: List of non-calibration DataFrames
+            cal_list: List of calibration DataFrames
+        """
+        calstate = self.file.data["CALSTATE"]
+        cal_mask = (calstate == 1) | (calstate == -1)
 
-        non_cal = file.data[file.data["CALSTATE"] == 0]
-        cal = file.data[(file.data["CALSTATE"] == 1) | (file.data["CALSTATE"] == -1)]
+        labels, num_labels = label(cal_mask)
 
-        return non_cal, cal
+        chunks = []
+        cal_list = []
+        non_cal_list = []
+
+        start = 0
+        for i in range(1, len(labels)):
+            if labels[i] != labels[i - 1]:
+                end = i
+                chunk = file.data[start:end]
+                if labels[start] == 0:
+                    non_cal_list.append(chunk)
+                else:
+                    cal_list.append(chunk)
+                start = i
+
+        # Handle final segment
+        chunk = file.data[start:]
+        if labels[start] == 0:
+            non_cal_list.append(chunk)
+        else:
+            cal_list.append(chunk)
+
+        print(len(cal_list[0]), len(cal_list[1]))
+        return non_cal_list, cal_list
     
 
     def split_polarity(self, data):
@@ -45,7 +79,7 @@ class Cal:
 
         split = {}
         ifnums = np.unique(data["IFNUM"])
-        print(ifnums)
+
         for ifnum in ifnums:
             split[f"pol{ifnum}"] = data[data["IFNUM"] == ifnum]
 
@@ -62,15 +96,42 @@ class Cal:
         return channel_means
     
 
-    def chauvenet_rejection(self):
-        _, cal = self.split_calibration()
+    def rcr(self, data, x):
+        """Perform Robust Chauvenet Rejection on a given dataset."""
+
+        r = rcr.RCR(rcr.LS_MODE_68)
+        r.performBulkRejection(data.tolist())
+
+        cleaned_data = r.result.cleanY
+        cleaned_mu = r.result.mu
+        cleaned_sigma = r.result.stDev
+
+        mask = r.result.indices
+        cleaned_time = x[mask]
+        cleaned_freq = np.array(r.result.cleanY)
+
+        plt.scatter(x[1:], data[1:])
+        plt.scatter(cleaned_time[1:], cleaned_data[1:])
+        plt.savefig("temporary.png")
+
+
+        return (cleaned_data, cleaned_mu, cleaned_sigma)
+
+
+    def sdfits_to_array(self):
+        """Convert SDFITS data to arrays to be used by RCR."""
+
+        data, cal = self.split_calibration()
 
         off = file.data[file.data["CALSTATE"] == 1]
         on = file.data[file.data["CALSTATE"] == -1]
-        print(off)
 
-        x_pol, y_pol = self.split_polarity(cal)
+        x_pol, y_pol = self.split_polarity(cal[0])
         xxs = self.split_slp(x_pol)
+        yys = self.split_slp(y_pol)
+
+        xxs_cal = []
+        yys_cal = []
 
         for i, key in enumerate(xxs):
             xx = xxs[key]
@@ -83,33 +144,47 @@ class Cal:
             xx_freq = np.array(xx_freq)
             time_xx = np.array(time_xx)
 
-            N = len(xx_freq)
-            mean = np.mean(xx_freq)
-            std = np.std(xx_freq)
-            criterion = 1.0 / (2 * N)
+            xxs_cal.append(xx_freq)
 
-            deviations = np.abs(xx_freq - mean) / std
+        for i, key in enumerate(yys):
+            yy = yys[key]
+            yy_freq = self.integrate(yy, axis=1)
 
-            prob = erfc(deviations / np.sqrt(2))
+            times_yy = [datetime.fromisoformat(t) for t in yy["DATE-OBS"]]
+            t0 = times_yy[0]
+            time_yy = [(t - t0).total_seconds() for t in times_yy]
 
-            mask = prob >= criterion
-            filtered_freq = xx_freq[mask]
-            filtered_time = time_xx[mask]
+            yy_freq = np.array(yy_freq)
+            time_yy = np.array(time_yy)
 
-            plt.figure()
-            plt.scatter(time_xx, xx_freq, label="Original", alpha=0.4)
-            plt.scatter(filtered_time, filtered_freq, color='red', label="Accepted")
-            plt.legend()
-            plt.xlabel("Time [s]")
-            plt.ylabel("Integrated Signal")
-            plt.title(f"Chauvenet Rejection on {key}")
-            plt.savefig(f"chauvenet_filtered_{key}.png")
+            yys_cal.append(yy_freq)
 
+        return xxs_cal, yys_cal, time_xx
+    
 
+    def clean_data(self):
+        """Clean data of outliers via RCR post extracting values from SDFITS file. Remove outliers from original data."""
+        
+        xxs_cal, yys_cal, time_xx = self.sdfits_to_array()
 
+        new_xxs = []
+        new_yys = []
+        
+        for i in xxs_cal:
+            values = self.rcr(i, time_xx)
+            new_xxs.append(values[0])
 
+        # for i, j in zip(xxs_cal[0], new_xxs[0]):
+        #     print(i, j)
 
-file = Mike("C:/Users/starb/Downloads/0136645.fits")
-file.validate_primary_header()
-file2 = Cal(file)
-file2.chauvenet_rejection()
+        print(len(xxs_cal[0]), len(new_xxs[0]))
+        
+
+if __name__ == "__main__":
+    file = Mike("C:/Users/starb/Downloads/0136645.fits")
+    v = Val(file)
+    v.validate_primary_header()
+    v.validate_data()
+
+    c = Cal(file)
+    c.clean_data()
