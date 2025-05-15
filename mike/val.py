@@ -1,4 +1,6 @@
 from astropy.io import fits
+from astropy.table import Table
+from datetime import datetime
 import numpy as np
 from file_exception import MyException
 import warnings
@@ -110,14 +112,103 @@ class Val:
 
 
     def validate_data(self):
-        return
+        with fits.open(self.file.file_path) as hdul:
+            self.dataH = hdul[1].header
+            self.data = Table(hdul[1].data)
+        TD = Table(self.data)
+        Data = np.array((TD["DATA"]))
+        if np.any(Data <= 0) or np.any(Data == None):
+            print("🚫 Data contains zero or None values.")
+        else:
+            print("✅ Data is valid.")
+        self.validate_types()
+        return None
+
+    def validate_types(self):
+        #check everry column
+        for column in self.data.colnames:
+            # check the types
+            column_data = self.data[column]
+            column_dtype = column_data.dtype.type
+            if not np.all([isinstance(value, column_dtype) for value in column_data]):
+                print(f"🚫 Column '{column}' contains values that do not match its data type. Expected data type: {column_dtype}.")
+                #fix the type mismatch
+                self.match_types(column)
+            else:
+                print(f"✅ Column '{column}' data types are valid.")
+            #convert the time columns to datetime
+            self.convert_to_datetime(column)
+
+            #check if the numeric columns have weird numbers
+            #self.check_numbers(column)
+                    
+        return None
+    #make sure all the column types match the data types of the values
+    def match_types(self, column):
+        column_data = self.data[column]
+        #find how many unique types there are in the column
+        unique_types = set(type(value) for value in self.data[column])
+        #if there are more than one type of value in a column, do smth about it
+        if len(unique_types) > 1:
+            raise TypeError(f"🚫 Column '{column}' contains mixed data types: {unique_types}.")
+        else:
+            #otherwise convert the column to the common type
+            common_type = unique_types.pop()
+            try:
+                #automatic conversion to str doesn't work some of the time so we need to try UTF-8 first
+                if common_type is str:
+                    if column_data.dtype.char == 'S':  # Check if it's a byte string
+                        self.data[column] = np.char.decode(self.data[column], encoding='utf-8', errors='replace')
+                    else:
+                        self.data[column] = np.array(self.data[column], dtype=str)
+                #make sure the arrays in the column are all floats
+                elif common_type is np.ndarray:
+                    if not all(isinstance(float(item), float) for subarray in column_data for item in subarray):
+                        raise TypeError(f"🚫 Column '{column}' contains arrays with non-float elements.")
+                    else:
+                        print(f"✅ All elements in arrays of column '{column}' are floats.")
+                #otherwise just convert the column to the common type
+                else:
+                    self.data[column] = self.data[column].astype(common_type)
+                print(f"🔄 Column '{column}' data type changed to {common_type}.")
+            except Exception as e:
+                print(f"⚠️ Failed to change column '{column}' data type to {common_type}: {e}")
+    
+    #convert the dates and times to datetime objects from the date time library
+    def convert_to_datetime(self, column):
+        #check if the column name contains any of the keywords
+        if any(keyword in column.upper() for keyword in ["DATE", "DURATION", "EXPOSURE", "LST" "MJD", "UTC", "UTSECS"]):
+            for i, value in enumerate(self.data[column]):
+                try:
+                    # Attempt to convert to datetime object
+                    self.data[column] = self.data[column].astype(datetime)
+                    #here is the format of the date time string
+                    self.data[column][i] = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%f")
+                except (ValueError, TypeError):
+                    try:
+                        # If conversion fails, convert to seconds (float)
+                        self.data[column] = self.data[column].astype(float)
+                        self.data[column][i] = float(value)
+                    except ValueError:
+                        print(f"⚠️ Failed to convert value '{value}' in column '{column}' to datetime or seconds.")
+        return None
+    
+    def check_numbers(self, column):
+        #check if certain columns have negative values and remove them
+        if column.upper() in ["DURATION", "EXPOSURE", "TSYS", "TCAL", "LST", "ELEVATION", "TAMBIENT", "PRESSURE", "HUMIDITY", "RESTFREQ", "FREQRES", "TRGTLONG", "MJD", "UTSECS" ]:
+            if np.any(self.data[column] < 0):
+                num_negatives = np.sum(self.data[column] < 0)
+                print(f"Found {num_negatives} negative values in column '{column}'. out of {len(self.data[column])} total values.")
+                self.data = self.data[self.data[column] >= 0]
+        
+        return self.data
     
 
 if __name__ == "__main__":
-    file = Mike("C:/Users/starb/Downloads/0136645.fits")
+    file = Mike("ONOFF.fits")
     v = Val(file)
-    v.validate_primary_header()
+    #v.validate_primary_header()
     v.validate_data()
 
-    print(file.validated_header)
+    #print(file.validated_header)
     print(file.validated_data)
