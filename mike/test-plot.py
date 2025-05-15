@@ -90,8 +90,8 @@ def graph(xxs: dict, yys: dict):
     plt.tight_layout()
     plt.savefig("polarization_all_channels.png")
 
-with fits.open("C:/Users/starb/Downloads/0136645.fits") as hdul:
-# with fits.open("C:/Users/starb/Downloads/0130688.fits") as hdul:
+# with fits.open("C:/Users/starb/Downloads/0136645.fits") as hdul:
+with fits.open("C:/Users/starb/Downloads/0130688.fits") as hdul:
     header = hdul[0].header
     data = hdul[1].data
 
@@ -99,10 +99,12 @@ with fits.open("C:/Users/starb/Downloads/0136645.fits") as hdul:
 
 non_cal, cal = split_calibration(data)
 x_pol, y_pol = split_polarity(non_cal)
-print(cal)
+
 xxs = split_slp(cal)
 yys = split_slp(y_pol)
 
-print(data["OBSMODE"])
+
+np.set_printoptions(threshold=np.inf)
+print(data['CALSTATE'])
 
 graph(xxs, yys)

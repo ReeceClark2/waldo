@@ -2,19 +2,15 @@ from astropy.io import fits
 import numpy as np
 from file_exception import MyException
 import warnings
+from file_init import Mike
 
-class Mike:
-    def __init__(self, file_path):
+class Val:
+    def __init__(self, file):
         '''Initialize binary fits cube by reading its header and data from a given file.'''
 
-        with fits.open(file_path) as hdul:
-            self.header = hdul[0].header
-            self.data = hdul[1].data
-        self.missing_values = []
-        self.file_path = file_path
+        self.file = file
 
-        self.validated_header = False
-        self.validated_data = False
+        pass
 
 
     def validate_primary_header(self):
@@ -29,7 +25,7 @@ class Mike:
         self.validate_primary_header_cards()
         self.validate_header_cards()
 
-        self.validated_header = True
+        self.file.validated_header = True
 
         return
         
@@ -37,7 +33,7 @@ class Mike:
     def validate_header_size(self):
         '''Validate that the header size is a multiple of 2880 bytes.'''
 
-        header_size = len(self.header.tostring())
+        header_size = len(self.file.header.tostring())
         if 0 != header_size % 2880:
             raise MyException("File header does not conform to 2880 byte standard!")
         
@@ -47,26 +43,26 @@ class Mike:
     def validate_primary_header_cards(self):
         '''Validate primary header cards 'SIMPLE, BITPIX, NAXIS, and END' exist and are valid.'''
 
-        if self.header.cards[0].keyword != 'SIMPLE':
+        if self.file.header.cards[0].keyword != 'SIMPLE':
             raise MyException("The first keyword in the header must be SIMPLE.")
 
         required_keys = ['SIMPLE', 'BITPIX', 'NAXIS']
         for key in required_keys:
-            if key not in self.header:
+            if key not in self.file.header:
                 raise MyException(f"Required keyword '{key}' missing in header.")
             
-        if self.header.get('BITPIX') not in [8, 16, 32, 64, -32, -64]:
+        if self.file.header.get('BITPIX') not in [8, 16, 32, 64, -32, -64]:
             raise MyException("BITPIX has an invalid value.")
         
-        naxis = self.header.get('NAXIS')
+        naxis = self.file.header.get('NAXIS')
         for i in range(1, naxis + 1):
             axis_key = f"NAXIS{i}"
-            if axis_key not in self.header:
+            if axis_key not in self.file.header:
                 raise MyException(f"Missing {axis_key} keyword.")
-            if self.header[axis_key] < 0:
+            if self.file.header[axis_key] < 0:
                 raise MyException(f"{axis_key} must be non-negative.")
             
-        with open(self.file_path, 'rb') as f:
+        with open(self.file.file_path, 'rb') as f:
             block_size = 2880
             header_bytes = b""
             while True:
@@ -87,14 +83,14 @@ class Mike:
         '''Validate all other header cards to ensure 80 byte length and there are no duplicates.'''
 
         seen = set()
-        for card in self.header.cards:
+        for card in self.file.header.cards:
             key, value, comment = card
             if key in seen and key != "COMMENT" and key != "HISTORY":
                 raise MyException(f"Duplicate keyword found: {key}")
             seen.add(key)
 
         types = []
-        for card in self.header.cards:
+        for card in self.file.header.cards:
             key, value, comment = card
             types.append(type(value))
 
@@ -105,10 +101,10 @@ class Mike:
                 raise MyException(f"Card '{key}' is {card_length} characters long: {card_str}")
             
             if value is None or (isinstance(value, str) and not value.strip()):
-                self.missing_values.append(key)
+                self.file.missing_values.append(key)
 
-        if len(self.missing_values) > 0:
-            warnings.warn(f"Values do not exist for {self.missing_values}", stacklevel=2)
+        if len(self.file.missing_values) > 0:
+            warnings.warn(f"Values do not exist for {self.file.missing_values}", stacklevel=2)
 
         return
 
@@ -116,6 +112,12 @@ class Mike:
     def validate_data(self):
         return
     
-file = Mike("C:/Users/starb/Downloads/0136645.fits")
-file.validate_primary_header()
-file.validate_data()
+
+if __name__ == "__main__":
+    file = Mike("C:/Users/starb/Downloads/0136645.fits")
+    v = Val(file)
+    v.validate_primary_header()
+    v.validate_data()
+
+    print(file.validated_header)
+    print(file.validated_data)
