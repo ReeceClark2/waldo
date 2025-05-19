@@ -5,6 +5,7 @@ import numpy as np
 from file_exception import MyException
 import warnings
 from file_init import Mike
+import os
 
 class Val:
     def __init__(self, file):
@@ -138,11 +139,11 @@ class Val:
             column_dtype = column_data.dtype.type
 
             if not np.all([isinstance(value, column_dtype) for value in column_data]):
-                print(f"🚫 Column '{column}' contains values that do not match its data type. Expected data type: {column_dtype}.")
+                #print(f"🚫 Column '{column}' contains values that do not match its data type. Expected data type: {column_dtype}.")
                 #fix the type mismatch
                 self.match_types(column)
-            else:
-                print(f"✅ Column '{column}' data types are valid.")
+            #else:
+                #print(f"✅ Column '{column}' data types are valid.")
             #convert the time columns to datetime
             self.convert_to_datetime(column)
 
@@ -175,14 +176,14 @@ class Val:
                 elif common_type is np.ndarray:
                     if not all(isinstance(float(item), float) for subarray in column_data for item in subarray):
                         raise TypeError(f"🚫 Column '{column}' contains arrays with non-float elements.")
-                    else:
-                        print(f"✅ All elements in arrays of column '{column}' are floats.")
+                    #else:
+                        #print(f"✅ All elements in arrays of column '{column}' are floats.")
 
                 # otherwise just convert the column to the common type
                 else:
                     self.data[column] = self.data[column].astype(common_type)
 
-                print(f"🔄 Column '{column}' data type changed to {common_type}.")
+                #print(f"🔄 Column '{column}' data type changed to {common_type}.")
 
             except Exception as e:
                 MyException(f"⚠️ Failed to change column '{column}' data type to {common_type}: {e}")
@@ -194,7 +195,7 @@ class Val:
         '''Convert the dates and times to datetime objects from the date time library'''
         
         #check if the column name contains any of the keywords
-        if any(keyword in column.upper() for keyword in ["DATE", "DURATION", "EXPOSURE", "LST" "MJD", "UTC", "UTSECS"]):
+        if any(keyword in column.upper() for keyword in ["DATE", "TIME", "DURATION", "EXPOSURE", "MJD", "UTC", "UTSECS"]) or column.upper() == "LST":
             for i, value in enumerate(self.data[column]):
                 try:
                     # Attempt to convert to datetime object
@@ -205,11 +206,13 @@ class Val:
                 except (ValueError, TypeError):
                     try:
                         # If conversion fails, convert to seconds (float)
-                        self.data[column] = self.data[column].astype(float)
+
                         self.data[column][i] = float(value)
 
                     except ValueError:
                         MyException(f"⚠️ Failed to convert value '{value}' in column '{column}' to datetime or seconds.")
+            self.data[column] = self.data[column].astype(type(self.data[column][0]))
+                
         
         return
     
@@ -228,11 +231,28 @@ class Val:
 
 if __name__ == "__main__":
     '''Test function to implement validation.'''
+    #multiple file testing
+    folder_path = "TrackingLowRes"  # Replace with your folder path
 
-    file = Mike("C:/Users/starb/Downloads/0136645.fits")
+    for fileN in os.listdir(folder_path):
+        if fileN.lower().endswith(".fits"):
+            file_path = os.path.join(folder_path, fileN)
+            try:
+                file = Mike(file_path)
+                v = Val(file)
+                v.validate_primary_header()
+                v.validate_data()
+                print(f"{fileN}: Headers ☺ - {file.validated_header}")
+                print(f"{fileN}: Data ☺ - {file.validated_data}")
+            except Exception as e:
+                print(f"{fileN}: Validation failed - {e}")
+
+    #single file testing
+    fileN = "ONOFF.fits" 
+    file = Mike(fileN)
     v = Val(file)
     v.validate_primary_header()
     v.validate_data()
 
-    print(file.validated_header)
-    print(file.validated_data)
+    print(str(file.validated_header) +" " + fileN + " Headers ☺")
+    print(str(file.validated_data) + " " + fileN + " Data ☺")
