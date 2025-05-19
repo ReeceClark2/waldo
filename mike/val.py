@@ -113,15 +113,27 @@ class Val:
 
 
     def validate_data(self):
-        with fits.open(self.file.file_path) as hdul:
-            self.dataH = hdul[1].header
-            self.data = Table(hdul[1].data)
+        try:
+            with fits.open(self.file.file_path) as hdul:
+                self.dataH = hdul[1].header
+                self.data = Table(hdul[1].data)
+            #print(repr(self.dataH))
 
-        Data = np.array((self.data["DATA"]))
+        except Exception as e:
+            raise MyException(f"Error reading data from FITS file: {e}")
 
-        if np.any(Data <= 0) or np.any(Data == None):
-            warnings.warn("🚫 Data contains zero or None values.")
+        Data = np.ma.array(self.data["DATA"])
+        #print(type(self.data['DATA'][0]))
 
+        # Check each array in Data for NaN or 0s and create a masked array
+        mask = np.isnan(Data) | (Data == 0)
+        if np.any(mask):
+            warnings.warn("🚫 Data contains zero or NaN values.", stacklevel=2)
+        self.data["DATA"] = np.ma.masked_array(Data, mask=mask)
+        #print (self.data["DATA"][3])
+        #print(np.mean(self.data["DATA"][3]))
+
+        # Check if the data types are correct and converts the time columns to be datetime or floats
         self.validate_types()
 
         self.file.validated_data = True
@@ -136,17 +148,15 @@ class Val:
         for column in self.data.colnames:
             # check the types
             column_data = self.data[column]
-            column_dtype = column_data.dtype.type
-
-            if not np.all([isinstance(value, column_dtype) for value in column_data]):
                 #print(f"🚫 Column '{column}' contains values that do not match its data type. Expected data type: {column_dtype}.")
                 #fix the type mismatch
-                self.match_types(column)
+            
+            self.match_types(column)
+            self.convert_to_datetime(column)
             #else:
                 #print(f"✅ Column '{column}' data types are valid.")
             #convert the time columns to datetime
-            self.convert_to_datetime(column)
-
+            
             #check if the numeric columns have weird numbers
             #self.check_numbers(column)
 
@@ -157,16 +167,28 @@ class Val:
         column_data = self.data[column]
         #find how many unique types there are in the column
         unique_types = set(type(value) for value in self.data[column])
-        #if there are more than one type of value in a column, do smth about it
         
+        #if there are more than one type of value in a column, do smth about it
         if len(unique_types) > 1:
-            raise TypeError(f"🚫 Column '{column}' contains mixed data types: {unique_types}.")
+            #try to convert the values to the most common type
+            common_type = max(unique_types, key=lambda t: sum(isinstance(value, t) for value in self.data[column]))
+            for i, value in enumerate(self.data[column]):
+                if not isinstance(value, common_type):
+                    try:
+                        self.data[column][i] = common_type(value)
+                    except Exception:
+                        # Mask the messed up values if conversion fails
+                        if not hasattr(self.data[column], 'mask'):
+                            self.data[column] = np.ma.array(self.data[column])
+                        self.data[column].mask[i] = True
+            print(f"🚫 Column '{column}' contains mixed data types: {unique_types}.")
         else:
             # otherwise convert the column to the common type
             common_type = unique_types.pop()
             try:
-                # automatic conversion to str doesn't work some of the time so we need to try UTF-8 first
+
                 if common_type is str:
+                    # automatic conversion to str doesn't work some of the time so we need to try UTF-8 first
                     if column_data.dtype.char == 'S':  # Check if it's a byte string
                         self.data[column] = np.char.decode(self.data[column], encoding='utf-8', errors='replace')
                     else:
@@ -175,7 +197,13 @@ class Val:
                 # make sure the arrays in the column are all floats
                 elif common_type is np.ndarray:
                     if not all(isinstance(float(item), float) for subarray in column_data for item in subarray):
-                        raise TypeError(f"🚫 Column '{column}' contains arrays with non-float elements.")
+                        #if not try to make them floats, otherwise raise an error
+                        for subarray in column_data:
+                            for idx, item in enumerate(subarray):
+                                try:
+                                    float(item)
+                                except Exception:
+                                    raise TypeError(f"🚫 Column '{column}' contains arrays with non-float elements: {item}")
                     #else:
                         #print(f"✅ All elements in arrays of column '{column}' are floats.")
 
@@ -186,6 +214,7 @@ class Val:
                 #print(f"🔄 Column '{column}' data type changed to {common_type}.")
 
             except Exception as e:
+                #if that all fails, raise an error
                 MyException(f"⚠️ Failed to change column '{column}' data type to {common_type}: {e}")
 
         return
@@ -196,30 +225,28 @@ class Val:
         
         #check if the column name contains any of the keywords
         if any(keyword in column.upper() for keyword in ["DATE", "TIME", "DURATION", "EXPOSURE", "MJD", "UTC", "UTSECS"]) or column.upper() == "LST":
-            for i, value in enumerate(self.data[column]):
                 try:
                     # Attempt to convert to datetime object
-                    self.data[column] = self.data[column].astype(datetime)
-                    #here is the format of the date time string
-                    self.data[column][i] = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%f")
+                    self.data[column] = np.vectorize(lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f"))(self.data[column])
 
                 except (ValueError, TypeError):
                     try:
                         # If conversion fails, convert to seconds (float)
-
-                        self.data[column][i] = float(value)
+                      self.data[column] = self.data[column].astype(float)
 
                     except ValueError:
-                        MyException(f"⚠️ Failed to convert value '{value}' in column '{column}' to datetime or seconds.")
-            self.data[column] = self.data[column].astype(type(self.data[column][0]))
-                
-        
+                        try:
+                            # If conversion fails, make it a string
+                            self.data[column] = self.data[column].astype(str)
+                        except:
+                            MyException(f"⚠️ Failed to convert value '{self.data[column]}' in column '{column}' to datetime or seconds.")
+                self.data[column] = self.data[column].astype(type(self.data[column][0]))
+
         return
-    
 
     def check_numbers(self, column):
         '''Check if certain columns have negative values and remove them'''
-        
+
         if column.upper() in ["DURATION", "EXPOSURE", "TSYS", "TCAL", "LST", "ELEVATION", "TAMBIENT", "PRESSURE", "HUMIDITY", "RESTFREQ", "FREQRES", "TRGTLONG", "MJD", "UTSECS" ]:
             if np.any(self.data[column] < 0):
                 num_negatives = np.sum(self.data[column] < 0)
@@ -231,25 +258,26 @@ class Val:
 
 if __name__ == "__main__":
     '''Test function to implement validation.'''
-    #multiple file testing
-    folder_path = "TrackingLowRes"  # Replace with your folder path
+    # #multiple file testing
+    # folder_path = "TrackingLowRes"  # Replace with your folder path
 
-    for fileN in os.listdir(folder_path):
-        if fileN.lower().endswith(".fits"):
-            file_path = os.path.join(folder_path, fileN)
-            try:
-                file = Mike(file_path)
-                v = Val(file)
-                v.validate_primary_header()
-                v.validate_data()
-                print(f"{fileN}: Headers ☺ - {file.validated_header}")
-                print(f"{fileN}: Data ☺ - {file.validated_data}")
-            except Exception as e:
-                print(f"{fileN}: Validation failed - {e}")
+    # for fileN in os.listdir(folder_path):
+    #     if fileN.lower().endswith(".fits"):
+    #         file_path = os.path.join(folder_path, fileN)
+    #         try:
+    #             file = Mike(file_path)
+    #             v = Val(file)
+    #             v.validate_primary_header()
+    #             v.validate_data()
+    #             print(f"{fileN}: Headers ☺ - {file.validated_header}")
+    #             print(f"{fileN}: Data ☺ - {file.validated_data}")
+    #         except Exception as e:
+    #             print(f"{fileN}: Validation failed - {e}")
 
     #single file testing
-    fileN = "ONOFF.fits" 
+    fileN = "0136645V2.fits" 
     file = Mike(fileN)
+    #print(file.data.header)
     v = Val(file)
     v.validate_primary_header()
     v.validate_data()
