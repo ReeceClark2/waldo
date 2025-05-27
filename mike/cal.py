@@ -1,16 +1,9 @@
-from astropy.io import fits
-from scipy.special import erfc
-from scipy.ndimage import label
-from scipy.stats import linregress
 import numpy as np
-from file_exception import MyException
+from scipy.stats import linregress
 from datetime import datetime
 import rcr
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
+from file_exception import MyException
 from file_init import Mike
 from val import Val
 from sort import Sort
@@ -19,15 +12,10 @@ from sort import Sort
 class Cal:
     def __init__(self, file):
         '''
-        Initialize file and confirm header and data have been validated.
+        Initialize file.
         '''
 
         self.file = file
-
-        # if self.file.validated_header == False:
-        #     raise MyException('FITS header has not been validated!')
-        # if self.file.validated_data == False:
-        #     raise MyException('FITS data has not been validated!')
     
 
     def average(self, data, axis):
@@ -86,6 +74,13 @@ class Cal:
     def sdfits_to_array(self, file, data):
         '''
         Convert sdfits data to more accessible, lighter arrays.
+
+        Params:
+        file: Mike class file
+        data: some astropy FITS loaded data
+
+        Return:
+        2D array: times and frequencies
         '''
 
         freq = self.average(data, axis=1)
@@ -100,6 +95,14 @@ class Cal:
     
 
     def compute_gain_deltas(self, file, ind):
+        '''
+        Compute gain deltas with pre calibration and post calibration.
+
+        Params:
+        file: Mike class file
+        ind: index of channel being processed
+        '''
+
         subset_data = file.data[ind]
         subset_indices = file.data_indices[ind]
 
@@ -155,6 +158,9 @@ class Cal:
     def gain_calibration(self, file):
         '''
         Carry out gain calibration for a given file.
+
+        Params:
+        file: Mike class file
         '''
 
         for ind, i in enumerate(file.data):
@@ -162,17 +168,6 @@ class Cal:
 
         return
         
-                
-    def source_calibration(self, cal_file):
-        '''
-        Carry out source calibration with currently selected file and uploaded calibration file.
-        '''
-
-
-
-        return
-
-
 
 if __name__ == "__main__":
     '''
@@ -189,15 +184,7 @@ if __name__ == "__main__":
     s.sort_data()
     s.clean_sections()
 
-    cal_file = Mike("C:/Users/starb/Downloads/0115701.fits")
-    
-    s = Sort(cal_file)
-    s.split_slp_feed()
-    s.sort_data()
-    s.clean_sections()
-
     c = Cal(file)
-    # c.test_plot(file.data)
     c.gain_calibration(file)
     
     print(file.gain_start)

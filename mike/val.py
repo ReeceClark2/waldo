@@ -1,17 +1,19 @@
+import numpy as np
 from astropy.io import fits
 from astropy.table import Table
-from datetime import datetime
-import numpy as np
-from file_exception import MyException
-import warnings
-from file_init import Mike
 from astropy.table import Column
-import os
-import time
+from datetime import datetime
+
+from file_exception import MyException
+from file_init import Mike
+import warnings
+
 
 class Val:
     def __init__(self, file):
-        '''Initialize binary fits cube by reading its header and data from a given file.'''
+        '''
+        Initialize binary fits cube by reading its header and data from a given file.
+        '''
 
         self.file = file
 
@@ -19,12 +21,14 @@ class Val:
 
 
     def validate_primary_header(self):
-        '''Validate the primary header of the given FITS file by:
+        '''
+        Validate the primary header of the given FITS file by:
             1) checking if it complies to 2880 byte header standard
             2) checking primary header cards
             3) checking for duplicate cards
             4) checking that each card is 80 character long
-            5) recording missing values in the header'''
+            5) recording missing values in the header
+        '''
         
         self.validate_header_size()
         self.validate_primary_header_cards()
@@ -36,7 +40,9 @@ class Val:
         
 
     def validate_header_size(self):
-        '''Validate that the header size is a multiple of 2880 bytes.'''
+        '''
+        Validate that the header size is a multiple of 2880 bytes.
+        '''
 
         header_size = len(self.file.header.tostring())
         if 0 != header_size % 2880:
@@ -46,7 +52,9 @@ class Val:
 
 
     def validate_primary_header_cards(self):
-        '''Validate primary header cards 'SIMPLE, BITPIX, NAXIS, and END' exist and are valid.'''
+        '''
+        Validate primary header cards 'SIMPLE, BITPIX, NAXIS, and END' exist and are valid.
+        '''
 
         if self.file.header.cards[0].keyword != 'SIMPLE':
             raise MyException("The first keyword in the header must be SIMPLE.")
@@ -85,7 +93,9 @@ class Val:
 
 
     def validate_header_cards(self):
-        '''Validate all other header cards to ensure 80 byte length and there are no duplicates.'''
+        '''
+        Validate all other header cards to ensure 80 byte length and there are no duplicates.
+        '''
 
         seen = set()
         for card in self.file.header.cards:
@@ -115,17 +125,21 @@ class Val:
 
 
     def validate_data(self):
+        '''
+        Validate data of the given FITS file by:
+            1) checking for negative or NaN values
+            2) validate fields of data by provided data type
+            3) convert datetime fields to datetime objects
+        '''
+
         try:
             with fits.open(self.file.file_path) as hdul:
                 self.dataH = hdul[1].header
                 self.data = Table(hdul[1].data)
-            #print(repr(self.dataH))
 
         except Exception as e:
             raise MyException(f"Error reading data from FITS file: {e}")
 
-
-        
         # Check if the data has bad values (NaN or negative)
         Data = np.ma.array(self.data["DATA"])
         # Check each array in Data for NaN or 0s and create a masked array
@@ -147,15 +161,8 @@ class Val:
 
         #check everry column
         for column in self.data.colnames:
-            # check the types
-            column_data = self.data[column]
-                #print(f"🚫 Column '{column}' contains values that do not match its data type. Expected data type: {column_dtype}.")
-                #fix the type mismatch
-            
             self.match_types(column)
             self.convert_to_datetime(column)
-            #else:
-                #print(f"✅ Column '{column}' data types are valid.")
             #convert the time columns to datetime
             
             #check if the numeric columns have weird numbers
@@ -169,9 +176,9 @@ class Val:
         #find how many unique types there are in the column
         unique_types = set(type(value) for value in self.data[column])
         
-        #if there are more than one type of value in a column, do smth about it
+        # if there are more than one type of value in a column, do smth about it
         if len(unique_types) > 1:
-            #try to convert the values to the most common type
+            # try to convert the values to the most common type
             common_type = max(unique_types, key=lambda t: sum(isinstance(value, t) for value in self.data[column]))
             for i, value in enumerate(self.data[column]):
                 if not isinstance(value, common_type):
@@ -205,14 +212,10 @@ class Val:
                                     float(item)
                                 except Exception:
                                     raise TypeError(f"🚫 Column '{column}' contains arrays with non-float elements: {item}")
-                    #else:
-                        #print(f"✅ All elements in arrays of column '{column}' are floats.")
 
                 # otherwise just convert the column to the common type
                 else:
                     self.data[column] = self.data[column].astype(common_type)
-
-                #print(f"🔄 Column '{column}' data type changed to {common_type}.")
 
             except Exception as e:
                 #if that all fails, raise an error
@@ -246,7 +249,9 @@ class Val:
         return
 
     def check_numbers(self, column):
-        '''Check if certain columns have negative values and remove them'''
+        '''
+        Check if certain columns have negative values and remove them.
+        '''
 
         if self.data[column].dtype.kind in {'U', 'S', 'O'}:
             # Vectorized replacement of 'nan' or 'NaN' (case-insensitive) with np.nan in string columns
@@ -266,37 +271,14 @@ class Val:
     
 
 if __name__ == "__main__":
-    '''Test function to implement validation.'''
-    start = time.time()
-    # #multiple file testing
-    folder_path = "TrackingLowRes"  # Replace with your folder path
-    average_time = 0
-    for fileN in os.listdir(folder_path):
-        start = time.time()
-        if fileN.lower().endswith(".fits"):
-            file_path = os.path.join(folder_path, fileN)
-            try:
-                file = Mike(file_path)
-                v = Val(file)
-                v.validate_primary_header()
-                v.validate_data()
-                print(f"{fileN}: Headers ☺ - {file.validated_header}")
-                print(f"{fileN}: Data ☺ - {file.validated_data}")
-            except Exception as e:
-                print(f"{fileN}: Validation failed - {e}")            
-        end = time.time()
-        print(f"Validation took {end - start:.2f} seconds.")
-        average_time += (end - start) / len(os.listdir(folder_path))
-    print(f"Average validation time: {average_time:.2f} seconds.")
-    #single file testing
-    fileN = "TrackingGl.fits" 
-    file = Mike(fileN)
-    #print(file.data.header)
+    '''
+    Test function to implement validation.
+    '''
+
+    file = Mike("C:/Users/starb/Downloads/0115701.fits")
     v = Val(file)
     v.validate_primary_header()
     v.validate_data()
-
-    print(str(file.validated_header) +" " + fileN + " Headers ☺")
-    print(str(file.validated_data) + " " + fileN + " Data ☺")
-    end = time.time()
-    print(f"Validation took {end - start:.2f} seconds.")
+    
+    print(file.validated_header)
+    print(file.validated_data)
