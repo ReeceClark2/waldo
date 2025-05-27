@@ -5,7 +5,9 @@ import numpy as np
 from file_exception import MyException
 import warnings
 from file_init import Mike
+from astropy.table import Column
 import os
+import time
 
 class Val:
     def __init__(self, file):
@@ -122,16 +124,15 @@ class Val:
         except Exception as e:
             raise MyException(f"Error reading data from FITS file: {e}")
 
-        Data = np.ma.array(self.data["DATA"])
-        #print(type(self.data['DATA'][0]))
 
+        
+        # Check if the data has bad values (NaN or negative)
+        Data = np.ma.array(self.data["DATA"])
         # Check each array in Data for NaN or 0s and create a masked array
-        mask = np.isnan(Data) | (Data == 0)
+        mask = np.isnan(Data) | (Data < 0)
         if np.any(mask):
-            warnings.warn("🚫 Data contains zero or NaN values.", stacklevel=2)
+            warnings.warn("🚫 Data contains negative or NaN values.", stacklevel=2)
         self.data["DATA"] = np.ma.masked_array(Data, mask=mask)
-        #print (self.data["DATA"][3])
-        #print(np.mean(self.data["DATA"][3]))
 
         # Check if the data types are correct and converts the time columns to be datetime or floats
         self.validate_types()
@@ -158,7 +159,7 @@ class Val:
             #convert the time columns to datetime
             
             #check if the numeric columns have weird numbers
-            #self.check_numbers(column)
+            self.check_numbers(column)
 
 
     def match_types(self, column):
@@ -228,24 +229,32 @@ class Val:
                 try:
                     # Attempt to convert to datetime object
                     self.data[column] = np.vectorize(lambda x: datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%f"))(self.data[column])
-
+                    self.data[column] = self.data[column].astype(type(self.data[column][0]))
                 except (ValueError, TypeError):
                     try:
                         # If conversion fails, convert to seconds (float)
-                      self.data[column] = self.data[column].astype(float)
+                      self.data[column] = Column(self.data[column].astype(float), dtype='f8')
 
                     except ValueError:
                         try:
                             # If conversion fails, make it a string
-                            self.data[column] = self.data[column].astype(str)
-                        except:
-                            MyException(f"⚠️ Failed to convert value '{self.data[column]}' in column '{column}' to datetime or seconds.")
-                self.data[column] = self.data[column].astype(type(self.data[column][0]))
+                            self.data[column] = Column(self.data[column].astype(str), dtype='U')
+                        except Exception:
+                            raise MyException(f"⚠️ Failed to convert value '{self.data[column]}' in column '{column}' to datetime or seconds.")
+                
 
         return
 
     def check_numbers(self, column):
         '''Check if certain columns have negative values and remove them'''
+
+        if self.data[column].dtype.kind in {'U', 'S', 'O'}:
+            # Vectorized replacement of 'nan' or 'NaN' (case-insensitive) with np.nan in string columns
+            def replace_nan(val):
+                if isinstance(val, str) and val.strip().lower() == 'nan':
+                    return np.nan
+                return val
+            self.data[column] = np.vectorize(replace_nan)(self.data[column])
 
         if column.upper() in ["DURATION", "EXPOSURE", "TSYS", "TCAL", "LST", "ELEVATION", "TAMBIENT", "PRESSURE", "HUMIDITY", "RESTFREQ", "FREQRES", "TRGTLONG", "MJD", "UTSECS" ]:
             if np.any(self.data[column] < 0):
@@ -258,24 +267,29 @@ class Val:
 
 if __name__ == "__main__":
     '''Test function to implement validation.'''
+    start = time.time()
     # #multiple file testing
-    # folder_path = "TrackingLowRes"  # Replace with your folder path
-
-    # for fileN in os.listdir(folder_path):
-    #     if fileN.lower().endswith(".fits"):
-    #         file_path = os.path.join(folder_path, fileN)
-    #         try:
-    #             file = Mike(file_path)
-    #             v = Val(file)
-    #             v.validate_primary_header()
-    #             v.validate_data()
-    #             print(f"{fileN}: Headers ☺ - {file.validated_header}")
-    #             print(f"{fileN}: Data ☺ - {file.validated_data}")
-    #         except Exception as e:
-    #             print(f"{fileN}: Validation failed - {e}")
-
+    folder_path = "TrackingLowRes"  # Replace with your folder path
+    average_time = 0
+    for fileN in os.listdir(folder_path):
+        start = time.time()
+        if fileN.lower().endswith(".fits"):
+            file_path = os.path.join(folder_path, fileN)
+            try:
+                file = Mike(file_path)
+                v = Val(file)
+                v.validate_primary_header()
+                v.validate_data()
+                print(f"{fileN}: Headers ☺ - {file.validated_header}")
+                print(f"{fileN}: Data ☺ - {file.validated_data}")
+            except Exception as e:
+                print(f"{fileN}: Validation failed - {e}")            
+        end = time.time()
+        print(f"Validation took {end - start:.2f} seconds.")
+        average_time += (end - start) / len(os.listdir(folder_path))
+    print(f"Average validation time: {average_time:.2f} seconds.")
     #single file testing
-    fileN = "0136645V2.fits" 
+    fileN = "TrackingGl.fits" 
     file = Mike(fileN)
     #print(file.data.header)
     v = Val(file)
@@ -284,3 +298,5 @@ if __name__ == "__main__":
 
     print(str(file.validated_header) +" " + fileN + " Headers ☺")
     print(str(file.validated_data) + " " + fileN + " Data ☺")
+    end = time.time()
+    print(f"Validation took {end - start:.2f} seconds.")
