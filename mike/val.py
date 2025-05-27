@@ -194,12 +194,12 @@ class Val:
         '''Convert the dates and times to datetime objects from the date time library'''
         
         #check if the column name contains any of the keywords
-        if any(keyword in column.upper() for keyword in ["DATE", "DURATION", "EXPOSURE", "LST" "MJD", "UTC", "UTSECS"]):
+        if any(keyword in column.upper() for keyword in ["DATE", "DURATION", "EXPOSURE", "LST" "MJD", "TIME", "UTC", "UTSECS"]):
             for i, value in enumerate(self.data[column]):
                 try:
                     # Attempt to convert to datetime object
                     self.data[column] = self.data[column].astype(datetime)
-                    #here is the format of the date time string
+                    # here is the format of the date time string
                     self.data[column][i] = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%f")
 
                 except (ValueError, TypeError):
@@ -210,7 +210,7 @@ class Val:
 
                     except ValueError:
                         MyException(f"⚠️ Failed to convert value '{value}' in column '{column}' to datetime or seconds.")
-        
+
         return
     
 

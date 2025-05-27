@@ -88,10 +88,10 @@ def graph(xxs: dict, yys: dict):
         axs[i][1].grid(True)
 
     plt.tight_layout()
-    plt.savefig("polarization_all_channels.png")
+    plt.savefig("3C286_polarization_all_channels.png")
 
 # with fits.open("C:/Users/starb/Downloads/0136645.fits") as hdul:
-with fits.open("C:/Users/starb/Downloads/0136645.fits") as hdul:
+with fits.open("C:/Users/starb/Downloads/0136870.fits") as hdul:
     header = hdul[0].header
     data = hdul[1].data
 
@@ -105,6 +105,5 @@ yys = split_slp(y_pol)
 
 
 np.set_printoptions(threshold=np.inf)
-print(data['CALSTATE'])
 
 graph(xxs, yys)

@@ -13,11 +13,14 @@ import matplotlib.pyplot as plt
 
 from file_init import Mike
 from val import Val
+from sort import Sort
 
 
 class Cal:
     def __init__(self, file):
-        '''Initialize file and confirm header and data have been validated.'''
+        '''
+        Initialize file and confirm header and data have been validated.
+        '''
 
         self.file = file
 
@@ -25,70 +28,12 @@ class Cal:
         #     raise MyException('FITS header has not been validated!')
         # if self.file.validated_data == False:
         #     raise MyException('FITS data has not been validated!')
-
-
-    def split_calibration(self):
-        """
-        Split data into alternating calibration and non-calibration sets.
-        Each contiguous calibration (CALSTATE == ±1) or science (CALSTATE == 0) block becomes a separate element in the returned lists.
-        Returns:
-            non_cal_list: List of non-calibration DataFrames
-            cal_list: List of calibration DataFrames
-        """
-        calstate = self.file.data["CALSTATE"]
-        cal_mask = (calstate == 1) | (calstate == -1)
-
-        labels, num_labels = label(cal_mask)
-
-        chunks = []
-        cal_list = []
-        non_cal_list = []
-
-        start = 0
-        for i in range(1, len(labels)):
-            if labels[i] != labels[i - 1]:
-                end = i
-                chunk = file.data[start:end]
-                if labels[start] == 0:
-                    non_cal_list.append(chunk)
-                else:
-                    cal_list.append(chunk)
-                start = i
-
-        # Handle final segment
-        chunk = file.data[start:]
-        if labels[start] == 0:
-            non_cal_list.append(chunk)
-        else:
-            cal_list.append(chunk)
-
-        print((cal_list[0]), (cal_list[1]))
-        return non_cal_list, cal_list
     
 
-    def split_polarity(self, data):
-        """Split data into X and Y polarization channels based on PLNUM (0 = X, 1 = Y)."""
-
-        x_pol = data[data["PLNUM"] == 0]
-        y_pol = data[data["PLNUM"] == 1]
-
-        return x_pol, y_pol
-    
-
-    def split_slp(self, data):
-        """Dynamically split data into channels based on IFNUM (e.g., pol0, pol1, ...)."""
-
-        split = {}
-        ifnums = np.unique(data["IFNUM"])
-
-        for ifnum in ifnums:
-            split[f"pol{ifnum}"] = data[data["IFNUM"] == ifnum]
-
-        return split
-    
-
-    def integrate(self, data, axis):
-        """Integrate across time (axis = 0) or integrate across frequency (axis = 1)."""
+    def average(self, data, axis):
+        '''
+        Average across time (axis = 0) or integrate across frequency (axis = 1).
+        '''
 
         intensities = np.array([row[6] for row in data])
         count = intensities.shape[axis]
@@ -109,15 +54,18 @@ class Cal:
         return x
 
 
-    def rcr(self, x, y):
-        """Perform Robust Chauvenet Rejection on a given dataset."""
-        x = x[1:]
-        y = y[1:]
+    def rcr(self, array):
+        '''
+        Perform functional Robust Chauvenet Rejection on a given dataset.
+        '''
+
+        x = array[0]
+        y = array[1]
 
         result = linregress(x, y)
         m = result.slope
         b = result.intercept
-        print('x', x, 'y', y)
+
         guess = [m, b]
         model = rcr.FunctionalForm(self.linear,
             x,
@@ -132,91 +80,125 @@ class Cal:
 
         best_fit_parameters = model.result.parameters
 
-        plt.scatter(x, y, color='black')
-        x = np.linspace(x[0], 230, 1000)
-        y = m * x + b
-        plt.plot(x, y, label='Pre RCR', color='red')
-
-        print('Best fit parameters:', best_fit_parameters)
-        b = best_fit_parameters[0]
-        m = best_fit_parameters[1]
-        y = m * x + b
-        plt.plot(x, y, label='Post RCR', color='green')
-
-        plt.legend()
-        plt.savefig('RCR Fit')
-
-        return
+        return best_fit_parameters
 
 
-    def sdfits_to_array(self):
-        """Convert SDFITS data to arrays to be used by RCR."""
+    def sdfits_to_array(self, file, data):
+        '''
+        Convert sdfits data to more accessible, lighter arrays.
+        '''
 
-        data, cal = self.split_calibration()
+        freq = self.average(data, axis=1)
 
-        use = np.concatenate((cal[0], cal[1]))
+        times = [datetime.fromisoformat(t) for t in data["DATE-OBS"]]
+        t0 = datetime.fromisoformat(file.header["DATE"])
+        time_rel = [(t - t0).total_seconds() for t in times]
 
-        x_pol, y_pol = self.split_polarity(use)
-        xxs = self.split_slp(x_pol)
-        yys = self.split_slp(y_pol)
+        result = ([np.array(time_rel), np.array(freq)])
 
-        xxs_cal = []
-        yys_cal = []
-
-        for i, key in enumerate(xxs):
-            xx = xxs[key]
-            xx_freq = self.integrate(xx, axis=1)
-
-            times_xx = [datetime.fromisoformat(t.decode("utf-8")) for t in xx["DATE-OBS"]]
-            t0 = times_xx[0]
-            time_xx = [(t - t0).total_seconds() for t in times_xx]
-
-            xx_freq = np.array(xx_freq)
-            time_xx = np.array(time_xx)
-
-            xxs_cal.append([xx_freq, time_xx])
-
-        for i, key in enumerate(yys):
-            yy = yys[key]
-            yy_freq = self.integrate(yy, axis=1)
-
-            times_yy = [datetime.fromisoformat(t.decode("utf-8")) for t in yy["DATE-OBS"]]
-            t0 = times_yy[0]
-            time_yy = [(t - t0).total_seconds() for t in times_yy]
-
-            yy_freq = np.array(yy_freq)
-            time_yy = np.array(time_yy)
-
-            yys_cal.append([yy_freq, time_yy])
-
-        return xxs_cal, yys_cal
+        return result
     
 
-    def clean_data(self):
-        """Clean data of outliers via RCR post extracting values from SDFITS file. Remove outliers from original data."""
-        
-        xxs_cal, yys_cal = self.sdfits_to_array()
+    def compute_gain_deltas(self, file, ind):
+        subset_data = file.data[ind]
+        subset_indices = file.data_indices[ind]
 
-        new_xxs = []
-        new_yys = []
-        
-        # plt.scatter(xxs_cal[0][0][1:],xxs_cal[0][1][1:])
-        # plt.savefig('test cal')
+        try:
+            pre_cal = subset_data[
+                (np.arange(len(subset_data)) < subset_indices[0]) &
+                (subset_data["SWPVALID"] == 0)
+            ]
+        except:
+            pre_cal = None
+            
+        try:
+            post_cal = subset_data[
+                (np.arange(len(subset_data)) >= subset_indices[1]) &
+                (subset_data["SWPVALID"] == 0)
+            ]
+        except:
+            post_cal = None
 
-        print(len(xxs_cal))
-        values = self.rcr(xxs_cal[0][1], xxs_cal[0][0])
-        values = self.rcr(yys_cal[0][1], yys_cal[0][0])
+
+        def get_delta(cal):
+            cal_on_array = self.sdfits_to_array(file, cal[cal["CALSTATE"] == 1])
+            cal_on_params = self.rcr(cal_on_array)
+            cal_off_array = self.sdfits_to_array(file, cal[cal["CALSTATE"] == 0])
+            cal_off_params = self.rcr(cal_off_array)
+
+            time = (np.mean(cal_on_array[0]) + np.mean(cal_off_array[0])) / 2
+            if time < (cal_on_array[0][0] + cal_off_array[0][-1]) / 2:
+                time = (cal_on_array[0][0] + cal_off_array[0][-1]) / 2
+            elif time > (cal_on_array[0][-1] + cal_off_array[0][0]) / 2:
+                time = (cal_on_array[0][-1] + cal_off_array[0][0]) / 2
+
+            delta = (cal_on_params[1] * time + cal_on_params[0]) - (cal_off_params[1] * time + cal_off_params[0])
+            
+            return delta, time
+        
+
+        if pre_cal is not None:
+            delta1, t1 = get_delta(pre_cal)
+            file.gain_start.append([delta1, t1])
+        else:
+            file.gain_start.append(None)
+
+        if post_cal is not None:
+            delta2, t2 = get_delta(post_cal)
+            file.gain_end.append([delta2, t2])
+        else:
+            file.gain_end.append(None)
+
+        return
+
+
+    def gain_calibration(self, file):
+        '''
+        Carry out gain calibration for a given file.
+        '''
+
+        for ind, i in enumerate(file.data):
+            self.compute_gain_deltas(file, ind)
 
         return
         
+                
+    def source_calibration(self, cal_file):
+        '''
+        Carry out source calibration with currently selected file and uploaded calibration file.
+        '''
+
+
+
+        return
+
+
 
 if __name__ == "__main__":
-    '''Test function to implement calibration.'''
+    '''
+    Test function to implement calibration.
+    '''
 
-    file = Mike("C:/Users/starb/Downloads/0136645.fits")
+    file = Mike("C:/Users/starb/Downloads/0115701.fits")
     v = Val(file)
     # v.validate_primary_header()
     # v.validate_data()
+    
+    s = Sort(file)
+    s.split_slp_feed()
+    s.sort_data()
+    s.clean_sections()
+
+    cal_file = Mike("C:/Users/starb/Downloads/0115701.fits")
+    
+    s = Sort(cal_file)
+    s.split_slp_feed()
+    s.sort_data()
+    s.clean_sections()
 
     c = Cal(file)
-    c.clean_data()
+    # c.test_plot(file.data)
+    c.gain_calibration(file)
+    
+    print(file.gain_start)
+    print(file.gain_end)

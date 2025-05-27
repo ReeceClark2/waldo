@@ -16,9 +16,18 @@ class Mike:
         self.validated_header = False
         self.validated_data = False
 
+        self.data_indices = []
+        self.gain_start = []
+        self.gain_end = []
+
+
 
 if __name__ == "__main__":
-    file = Mike("C:/Users/starb/Downloads/0136645.fits")
-    
+    '''Test function to test uploaded file.'''
+
+    file = Mike("C:/Users/starb/Downloads/0115701.fits")
+
     print(file.header)
-    print(file.data[0])
+    np.set_printoptions(threshold=100000)
+    print(len(file.data['SWPVALID']))
+    # print(file.data['CALSTATE'])
