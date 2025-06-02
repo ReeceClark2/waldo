@@ -2,17 +2,32 @@ from collections import defaultdict
 from scipy.ndimage import label, median_filter
 import numpy as np
 from file_init import Mike
+from file_exception import MyException
 
 
 class Sort:
     def __init__(self, file):
+        '''
+        Initialize file and confirm header and data have been validated.
+        '''
+
         self.file = file
+
+        # if self.file.validated_header == False:
+        #     raise MyException('FITS header has not been validated!')
+        # if self.file.validated_data == False:
+        #     raise MyException('FITS data has not been validated!')
 
 
     def split_slp_feed(self):
+        '''
+        Split the data of the provided file by channel and feed.
+        '''
+
         ifnums = np.unique(self.file.data["IFNUM"])
         plnums = np.unique(self.file.data["PLNUM"])
         print(f"IFNUMs: {ifnums}, PLNUMs: {plnums}")
+
         ind = 0
         data = []
         for i in ifnums:
@@ -27,6 +42,16 @@ class Sort:
 
 
     def divide_section(self, section):
+        '''
+        Locate indices within some channel of the data.
+
+        Params:
+        section: astropy FITS table
+
+        Returns:
+        array: 1st index of data, 1st index of post calibration
+        '''
+
         data_start_ind = None
         post_cal_start_ind = None
 
@@ -60,6 +85,10 @@ class Sort:
 
 
     def sort_data(self):
+        '''
+        Iterate through each channel of data and append to data_indices.
+        '''
+
         for i in self.file.data:
             result = self.divide_section(i)
             self.file.data_indices.append(result)
@@ -67,7 +96,11 @@ class Sort:
         return
 
 
-    def clean_sections(self):
+    def section_debug(self):
+        '''
+        Iterate through data and check the pre calibration, data, and post calibration of each.
+        '''
+
         for ind, i in enumerate(self.file.data):
             current_indices = self.file.data_indices[ind]
             data_start_ind = current_indices[0]
@@ -88,4 +121,4 @@ if __name__ == "__main__":
     s = Sort(file)
     s.split_slp_feed()
     s.sort_data()
-    s.clean_sections()
+    s.section_debug()

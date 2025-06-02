@@ -113,7 +113,11 @@ class Cal:
             ]
         except:
             pre_cal = None
-            
+        data = subset_data[
+            (np.arange(len(subset_data)) >= subset_indices[0]) &
+            (np.arange(len(subset_data)) < subset_indices[1]) &
+            (subset_data["SWPVALID"] == 1)
+        ]
         try:
             post_cal = subset_data[
                 (np.arange(len(subset_data)) >= subset_indices[1]) &
@@ -123,10 +127,15 @@ class Cal:
             post_cal = None
 
 
-        def get_delta(cal):
+        def get_delta(cal, state):
             cal_on_array = self.sdfits_to_array(file, cal[cal["CALSTATE"] == 1])
             cal_on_params = self.rcr(cal_on_array)
-            cal_off_array = self.sdfits_to_array(file, cal[cal["CALSTATE"] == 0])
+            if len(cal[cal["CALSTATE"] == 0]):
+                cal_off_array = self.sdfits_to_array(file, cal[cal["CALSTATE"] == 0])
+            elif state == 0:
+                cal_off_array = self.sdfits_to_array(file, data[:5])
+            elif state == 1:
+                cal_off_array = self.sdfits_to_array(file, data[-5:])
             cal_off_params = self.rcr(cal_off_array)
 
             time = (np.mean(cal_on_array[0]) + np.mean(cal_off_array[0])) / 2
@@ -141,13 +150,13 @@ class Cal:
         
 
         if pre_cal is not None:
-            delta1, t1 = get_delta(pre_cal)
+            delta1, t1 = get_delta(pre_cal, 0)
             file.gain_start.append([delta1, t1])
         else:
             file.gain_start.append(None)
 
         if post_cal is not None:
-            delta2, t2 = get_delta(post_cal)
+            delta2, t2 = get_delta(post_cal, 1)
             file.gain_end.append([delta2, t2])
         else:
             file.gain_end.append(None)
@@ -174,7 +183,7 @@ if __name__ == "__main__":
     Test function to implement calibration.
     '''
 
-    file = Mike("C:/Users/starb/Downloads/0115701.fits")
+    file = Mike("C:/Users/starb/Downloads/0132783.fits")
     v = Val(file)
     # v.validate_primary_header()
     # v.validate_data()
@@ -182,7 +191,6 @@ if __name__ == "__main__":
     s = Sort(file)
     s.split_slp_feed()
     s.sort_data()
-    s.clean_sections()
 
     c = Cal(file)
     c.gain_calibration(file)
