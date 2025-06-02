@@ -44,7 +44,7 @@ class Mike:
         self.gain_start = []
         self.gain_end = []
 
-        self.continum = []
+        self.continuum = []
         self.spectrum = [[]]
 
 

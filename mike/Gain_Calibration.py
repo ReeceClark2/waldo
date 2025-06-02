@@ -68,13 +68,16 @@ class gain_calibration:
 
                 #get an array of the continuum data
                 data = file.data[ind]
-                data = f.sdfits_to_array(file, data)
+                data = f.sdfits_to_array(data)
 
                 #for the time array in the data find the calibrated height for each intensity
+                calib_height = []
                 for idx, i in enumerate(data[0]):
                     delta = delta1 + (delta2 - delta1) * (data[0][idx] - time1) / (time2 - time1)
-                    calib_height = data[1][idx]/delta
-                    calib_height_data.append([data[0][idx], calib_height])
+                    #add each calibration height to the calib_height list
+                    data[1][idx] = (data[1][idx]/delta)
+                    # calib_height_data.append([data[0][idx], calib_height])
+                calib_height_data = (data)
                 #print("HEre", calib_height_data)
 
             # If gain_start is None and gain_end is not None, use gain_end for calibration
@@ -83,12 +86,13 @@ class gain_calibration:
                 delta = file.gain_end[ind][0]
 
                 data = file.data[ind]
-                data = f.sdfits_to_array(file, data)
+                data = f.sdfits_to_array(data)
 
-
-                for idx, i in enumerate(data[0]):
-                    calib_height = data[1][idx]/delta
-                    calib_height_data.append([data[0][idx], calib_height])
+                data[1] = data[1] / delta
+                calib_height_data = (data)
+                # for idx, i in enumerate(data[0]):
+                #     calib_height = data[1][idx]/delta
+                #     calib_height_data.append([data[0][idx], calib_height])
 
             # If gain_start is present but gain_end is not, use gain_start for calibration
             elif file.gain_start[ind] is not None and file.gain_end[ind] is None:
@@ -96,31 +100,35 @@ class gain_calibration:
                 delta = file.gain_start[ind][0]
 
                 data = file.data[ind]
-                data = f.sdfits_to_array(file, data)
+                data = f.sdfits_to_array(data)
 
+                data[1] = data[1] / delta
+                calib_height_data = (data)
+                # for idx, i in enumerate(data[0]):
+                #     calib_height = data[1][idx]/delta
+                #     calib_height_data.append([data[0][idx], calib_height])
 
-                for idx, i in enumerate(data[0]):
-                    calib_height = data[1][idx]/delta
-                    calib_height_data.append([data[0][idx], calib_height])
-
-            # If both gain_start and gain_end are None, don't calibrate
-            elif file.gain_start[ind] is None and file.gain_end[ind] is None:
-                self.file.Gain_Calibrated = False
+            # If gain_start is present but gain_end is not, use gain_start for calibration
+            elif file.gain_start[ind] is not None and file.gain_end[ind] is None:
+                calibrations += 1
+                delta = file.gain_start[ind][0]
 
                 data = file.data[ind]
-                data = f.sdfits_to_array(file, data)
+                data = f.sdfits_to_array(data)
 
+                data[1] = data[1] / delta
+                calib_height_data.append(data)
                 # If both gain_start and gain_end are None, just copy the original data
                 #But gotta turn it into a list of time, intensity lists
-                calib_height_data = []
-                for t, intensity in zip(data[0], data[1]):
-                    calib_height_data.append([t, intensity])
+                # calib_height_data = []
+                # for t, intensity in zip(data[0], data[1]):
+                #     calib_height_data.append([t, intensity])
                 
-                self.file.continum.append(calib_height_data)
+                self.file.continuum.append(calib_height_data)
                 continue
 
-            # add the calibrated height data to continum
-            self.file.continum.append(calib_height_data)
+            # add the calibrated height data to continuum
+            self.file.continuum.append(calib_height_data)
             #check if all calibrations are done
             if calibrations == datas:
                 self.file.Gain_Calibrated = True
@@ -140,7 +148,7 @@ if __name__ == "__main__":
     s.sort_data()
 
     c = Cal(file)
-    c.gain_calibration(file)
+    c.gain_calibration()
     Data.calib_Heights(file)
 
-    # print(file.continum)
+    print(file.continuum[1][0][1])
