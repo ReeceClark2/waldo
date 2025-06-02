@@ -48,7 +48,7 @@ if __name__ == "__main__":
     Test function to implement calibration.
     '''
 
-    file = Mike("C:/Users/starb/Downloads/0136940.fits")
+    file = Mike("C:/Users/starb/Downloads/0136981.fits")
     v = Val(file)
     # v.validate_primary_header()
     # v.validate_data()

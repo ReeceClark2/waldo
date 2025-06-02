@@ -1,6 +1,9 @@
 from astropy.io import fits
 from file_exception import MyException
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 
 class Mike:
@@ -49,9 +52,33 @@ if __name__ == "__main__":
     Test function to test uploaded file.
     '''
 
-    file = Mike("C:/Users/starb/Downloads/0136940.fits")
+    file = Mike("C:/Users/starb/Downloads/0136375.fits")
 
     np.set_printoptions(threshold=100000)
 
     print(repr(file.header))
-    print(repr(file.data[0]))
+    print(repr(file.data["ELEVATIO"]))
+
+    fig, ax1 = plt.subplots()
+
+    # Plot ELEVATIO on the primary y-axis
+    ax1.plot(file.data["CALSTATE"], color='tab:blue', label='CALSTATE')
+    ax1.set_ylabel("CALSTATE", color='tab:blue')
+    ax1.tick_params(axis='y', labelcolor='tab:blue')
+    ax1.set_xlabel("Index")
+    ax1.set_ylim(-1.1, 1.1)  # Set SWPVALID y-axis from 0 to 1
+
+    # Create a second y-axis sharing the same x-axis
+    ax2 = ax1.twinx()
+    ax2.plot(file.data["SWPVALID"], color='tab:red', label='SWPVALID', alpha=0.5)
+    ax2.set_ylabel("SWPVALID", color='tab:red')
+    ax2.tick_params(axis='y', labelcolor='tab:red')
+    ax2.set_ylim(-0.1, 1.1)  # Set SWPVALID y-axis from 0 to 1
+
+    # Optional: Add a legend
+    fig.legend(loc="upper right", bbox_to_anchor=(1, 1), bbox_transform=ax1.transAxes)
+
+    # Save the figure
+    plt.title("Elevation and SWPVALID")
+    plt.savefig("Elevation.png", dpi=300, bbox_inches='tight')
+    plt.close()
