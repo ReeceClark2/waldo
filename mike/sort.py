@@ -58,7 +58,6 @@ class Sort:
         cal_started = False
         pre_cal_complete = False
 
-
         for ind, point in enumerate(section):
             if point["CALSTATE"] == 1:
                 cal_started = True
@@ -67,9 +66,15 @@ class Sort:
                 data_start_ind = ind
                 pre_cal_complete = True
 
-            if pre_cal_complete and point["SWPVALID"] == 0:
-                post_cal_start_ind = ind
+            if pre_cal_complete and point["SWPVALID"] == 0 and section[ind-1]["SWPVALID"] == 0:
+                if post_cal_start_ind is None:
+                    post_cal_start_ind = ind
+            else:
+                post_cal_start_ind = None
+
+            if pre_cal_complete and point["SWPVALID"] == 0 and point["CALSTATE"] == 1:
                 break
+
 
         if data_start_ind is None:
             for ind, point in enumerate(section):
@@ -114,7 +119,7 @@ class Sort:
 
 
 if __name__ == "__main__":
-    file = Mike("C:/Users/starb/Downloads/0115701.fits")
+    file = Mike("C:/Users/starb/Downloads/0136303.fits")
 
     np.set_printoptions(threshold=100000)
 
@@ -122,3 +127,6 @@ if __name__ == "__main__":
     s.split_slp_feed()
     s.sort_data()
     s.section_debug()
+
+    print(file.data[0]['CALSTATE'])
+    print(file.data[0]['SWPVALID'])
