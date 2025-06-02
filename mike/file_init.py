@@ -37,10 +37,14 @@ class Mike:
 
         self.validated_header = False
         self.validated_data = False
+        self.Gain_Calibrated = False
 
         self.data_indices = []
         self.gain_start = []
         self.gain_end = []
+
+        self.continum = []
+        self.spectrum = [[]]
 
 
 if __name__ == "__main__":
