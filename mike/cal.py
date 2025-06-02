@@ -71,7 +71,7 @@ class Cal:
         return best_fit_parameters
 
 
-    def sdfits_to_array(self, file, data):
+    def sdfits_to_array(self, data):
         '''
         Convert sdfits data to more accessible, lighter arrays.
 
@@ -86,7 +86,7 @@ class Cal:
         freq = self.average(data, axis=1)
 
         times = [datetime.fromisoformat(t) for t in data["DATE-OBS"]]
-        t0 = datetime.fromisoformat(file.header["DATE"])
+        t0 = datetime.fromisoformat(self.file.header["DATE"])
         time_rel = [(t - t0).total_seconds() for t in times]
 
         result = ([np.array(time_rel), np.array(freq)])
@@ -94,7 +94,7 @@ class Cal:
         return result
     
 
-    def compute_gain_deltas(self, file, ind):
+    def compute_gain_deltas(self, ind):
         '''
         Compute gain deltas with pre calibration and post calibration.
 
@@ -103,8 +103,8 @@ class Cal:
         ind: index of channel being processed
         '''
 
-        subset_data = file.data[ind]
-        subset_indices = file.data_indices[ind]
+        subset_data = self.file.data[ind]
+        subset_indices = self.file.data_indices[ind]
 
         try:
             pre_cal = subset_data[
@@ -128,14 +128,18 @@ class Cal:
 
 
         def get_delta(cal, state):
-            cal_on_array = self.sdfits_to_array(file, cal[cal["CALSTATE"] == 1])
+            cal_on_array = self.sdfits_to_array(cal[cal["CALSTATE"] == 1])
             cal_on_params = self.rcr(cal_on_array)
+
             if len(cal[cal["CALSTATE"] == 0]):
-                cal_off_array = self.sdfits_to_array(file, cal[cal["CALSTATE"] == 0])
+                cal_off_array = self.sdfits_to_array(cal[cal["CALSTATE"] == 0])
             elif state == 0:
-                cal_off_array = self.sdfits_to_array(file, data[:5])
+                cal_off_array = self.sdfits_to_array(data[:5])
             elif state == 1:
-                cal_off_array = self.sdfits_to_array(file, data[-5:])
+                cal_off_array = self.sdfits_to_array(data[-5:])
+            else:
+                return
+
             cal_off_params = self.rcr(cal_off_array)
 
             time = (np.mean(cal_on_array[0]) + np.mean(cal_off_array[0])) / 2
@@ -151,29 +155,29 @@ class Cal:
 
         if pre_cal is not None:
             delta1, t1 = get_delta(pre_cal, 0)
-            file.gain_start.append([delta1, t1])
+            self.file.gain_start.append([delta1, t1])
         else:
-            file.gain_start.append(None)
+            self.file.gain_start.append(None)
 
         if post_cal is not None:
             delta2, t2 = get_delta(post_cal, 1)
-            file.gain_end.append([delta2, t2])
+            self.file.gain_end.append([delta2, t2])
         else:
-            file.gain_end.append(None)
+            self.file.gain_end.append(None)
 
         return
 
 
-    def gain_calibration(self, file):
+    def gain_calibration(self):
         '''
-        Carry out gain calibration for a given file.
+        Carry out gain calibration for a given self.file.
 
         Params:
         file: Mike class file
         '''
 
-        for ind, i in enumerate(file.data):
-            self.compute_gain_deltas(file, ind)
+        for ind, i in enumerate(self.file.data):
+            self.compute_gain_deltas(ind)
 
         return
         
@@ -193,7 +197,7 @@ if __name__ == "__main__":
     s.sort_data()
 
     c = Cal(file)
-    c.gain_calibration(file)
+    c.gain_calibration()
     
     print(file.gain_start)
     print(file.gain_end)

@@ -1,5 +1,6 @@
 from astropy.io import fits
 from file_exception import MyException
+import numpy as np
 
 
 class Mike:
@@ -48,7 +49,9 @@ if __name__ == "__main__":
     Test function to test uploaded file.
     '''
 
-    file = Mike("C:/Users/starb/Downloads/0115701.fits")
+    file = Mike("C:/Users/starb/Downloads/0136940.fits")
 
-    print(file.header)
-    print(file.data[0])
+    np.set_printoptions(threshold=100000)
+
+    print(repr(file.header))
+    print(repr(file.data[0]))
