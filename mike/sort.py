@@ -119,7 +119,7 @@ class Sort:
 
 
 if __name__ == "__main__":
-    file = Mike("C:/Users/starb/Downloads/0136303.fits")
+    file = Mike("C:/Users/starb/Downloads/0136870.fits")
 
     np.set_printoptions(threshold=100000)
 
@@ -127,6 +127,6 @@ if __name__ == "__main__":
     s.split_slp_feed()
     s.sort_data()
     s.section_debug()
-
+    
     print(file.data[0]['CALSTATE'])
     print(file.data[0]['SWPVALID'])

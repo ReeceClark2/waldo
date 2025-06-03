@@ -89,7 +89,7 @@ class Cal:
         t0 = datetime.fromisoformat(self.file.header["DATE"])
         time_rel = [(t - t0).total_seconds() for t in times]
 
-        result = ([np.array(time_rel), np.array(freq)])
+        result = (np.array(time_rel), np.array(freq))
 
         return result
     
@@ -133,12 +133,12 @@ class Cal:
 
             if len(cal[cal["CALSTATE"] == 0]):
                 cal_off_array = self.sdfits_to_array(cal[cal["CALSTATE"] == 0])
-            elif state == 0:
-                cal_off_array = self.sdfits_to_array(data[:5])
-            elif state == 1:
-                cal_off_array = self.sdfits_to_array(data[-5:])
+            # elif state == 0:
+            #     cal_off_array = self.sdfits_to_array(data[:5])
+            # elif state == 1:
+            #     cal_off_array = self.sdfits_to_array(data[-5:])
             else:
-                return
+                return None
 
             cal_off_params = self.rcr(cal_off_array)
 
@@ -149,21 +149,28 @@ class Cal:
                 time = (cal_on_array[0][-1] + cal_off_array[0][0]) / 2
 
             delta = (cal_on_params[1] * time + cal_on_params[0]) - (cal_off_params[1] * time + cal_off_params[0])
-            
+
             return delta, time
         
 
         if pre_cal is not None:
-            delta1, t1 = get_delta(pre_cal, 0)
-            self.file.gain_start.append([delta1, t1])
+            try:
+                delta1, t1 = get_delta(pre_cal, 0)
+                self.file.gain_start.append([delta1, t1])
+            except:
+                self.file.gain_start.append(None)
         else:
             self.file.gain_start.append(None)
 
         if post_cal is not None:
-            delta2, t2 = get_delta(post_cal, 1)
-            self.file.gain_end.append([delta2, t2])
+            try:
+                delta2, t2 = get_delta(post_cal, 1)
+                self.file.gain_end.append([delta2, t2])
+            except:
+                self.file.gain_end.append(None)
         else:
             self.file.gain_end.append(None)
+
 
         return
 
@@ -187,7 +194,7 @@ if __name__ == "__main__":
     Test function to implement calibration.
     '''
 
-    file = Mike("C:/Users/starb/Downloads/0132783.fits")
+    file = Mike("C:/Users/starb/Downloads/0136375.fits")
     v = Val(file)
     # v.validate_primary_header()
     # v.validate_data()
