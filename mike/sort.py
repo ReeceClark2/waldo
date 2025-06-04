@@ -1,8 +1,10 @@
 from collections import defaultdict
+from tabnanny import check
 from scipy.ndimage import label, median_filter
 import numpy as np
 from file_init import Mike
 from file_exception import MyException
+from astropy.table import Table
 
 
 class Sort:
@@ -99,7 +101,81 @@ class Sort:
             self.file.data_indices.append(result)
 
         return
+    
+    def get_startend_freqs(self):
+        '''
+        Get the start and stop frequencies for each channel in the data.
+        param file: Mike class file
+        returns: populates the file's freqs field with start and stop frequencies
+        '''
+        freqs = []
+        for i in range(len(self.file.data)):
+            #scour the header for the bandwidth and center frequencies
+            for key, value in self.file.header.items():
+                #bandwidth
+                if key == ("OBSBW"):
+                    band = value
+                #lowres center frequency
+                elif key == ("OBSFREQ"):
+                    center = [value]
+                #HIRES bands center frequencies
+                elif key == ("HISTORY"):
+                    #if HIRES BANDS exist replace center with the HIRES center frequencies
+                    if value.startswith("HIRES bands"):
+                        # Extract all integers from the string
+                        value = value.replace(",", " ").strip()
+                        value = value.split(" ")
+                        center = []
+                        #split the value into individual words and numbers
+                        for k in value:
+                            k = str(k).strip()
+                            try:
+                                #if it's a float add it to the center list
+                                k = float(k)
+                                center.append(k)
+                            except ValueError:
+                                #otherwise skip it
+                                continue
+                    # start/stop channels
+            for c in center:
+                start_f = c - (band / 2)
+                stop_f = c + (band / 2)
+            freqs.append(np.array([start_f, stop_f]))
+        self.file.freqs = freqs
+    
+    def get_startstop_channels(self):
+        '''
+        Get the start and stop channels for each channel in the data.
+        param file: Mike class file
+        returns: cuts out the channels in the data that are not in the start and stop channels
+        '''
 
+        for i in range(len(self.file.data)):
+            #search through the header 
+            for key, value in self.file.header.items():
+                if key == ("HISTORY"):
+                    if value.startswith("START,STOP"):
+                        # Extract all integers from the string
+                        value = value.replace(",", " ").strip()
+                        value = value.split(" ")
+                        #split the value into individual words and numbers
+                        channels = []
+                        for k in value:
+                            k = str(k).strip()
+                            try:
+                                #if it's an integer add it to the channels list
+                                k = int(k)
+                                channels.append(k)
+                            except ValueError:
+                                #if it can't become a integer, skip it
+                                continue
+                        # Remove all string type characters from the channels list
+                        channel1 = int(channels[0])
+                        channel2 = int(channels[1])
+            # Cut the DATA column to only include the channels in the start and stop channels
+            t = Table(self.file.data[i])
+            t.replace_column('DATA', np.array([row[channel1:channel2] for row in t['DATA']]))
+            self.file.data[i] = t
 
     def section_debug(self):
         '''
@@ -119,7 +195,7 @@ class Sort:
 
 
 if __name__ == "__main__":
-    file = Mike("C:/Users/starb/Downloads/0136870.fits")
+    file = Mike("TrackingHighRes/0136376.fits")
 
     np.set_printoptions(threshold=100000)
 
@@ -127,6 +203,8 @@ if __name__ == "__main__":
     s.split_slp_feed()
     s.sort_data()
     s.section_debug()
+    s.get_startend_freqs()
+    s.get_startstop_channels()
     
     print(file.data[0]['CALSTATE'])
     print(file.data[0]['SWPVALID'])

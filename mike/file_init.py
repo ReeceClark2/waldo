@@ -48,7 +48,9 @@ class Mike:
         self.gain_end = []
 
         self.continuum = []
-        self.spectrum = [[]]
+        self.spectrum = []
+
+        self.freqs = []
 
 
 if __name__ == "__main__":
