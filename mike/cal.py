@@ -7,6 +7,9 @@ from file_exception import MyException
 from file_init import Mike
 from val import Val
 from sort import Sort
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 
 class Cal:
@@ -50,9 +53,13 @@ class Cal:
         x = array[0]
         y = array[1]
 
-        result = linregress(x, y)
-        m = result.slope
-        b = result.intercept
+        if len(x) > 1 and len(y) > 1:
+            result = linregress(x, y)
+            m = result.slope
+            b = result.intercept
+        else:
+            m = 0
+            b = y[0]
 
         guess = [m, b]
         model = rcr.FunctionalForm(self.linear,
@@ -62,13 +69,28 @@ class Cal:
             guess
         )
 
-        r = rcr.RCR(rcr.LS_MODE_68) 
+        r = rcr.RCR(rcr.SS_MEDIAN_DL) 
         r.setParametricModel(model)
         r.performBulkRejection(y)
 
-        best_fit_parameters = model.result.parameters
+        indices = r.result.indices
+        print('\nold x: ', x)
+        plt.plot(x, 'red')
+        x = x[indices]
+        y = y[indices]
+        print('new x: ', x)
+        plt.plot(x, 'green')
+        plt.savefig('rejection')
+        plt.close()
 
-        return best_fit_parameters
+        best_fit_parameters = model.result.parameters
+        
+        sigma = (1 / (len(x) - 2)) * np.sum((y - best_fit_parameters[1] * x - best_fit_parameters[0]) ** 2)
+        m_sd = np.sqrt(sigma / np.sum((x - np.mean(x)) ** 2))
+        b_sd = np.sqrt(sigma * ((1 / len(x)) + ((np.mean(x) ** 2) / np.sum((x - np.mean(x)) ** 2))))
+        uncertainties = (b_sd, m_sd)
+
+        return best_fit_parameters, uncertainties
 
 
     def sdfits_to_array(self, data):
@@ -102,99 +124,73 @@ class Cal:
         file: Mike class file
         ind: index of channel being processed
         '''
-
-        subset_data = self.file.data[ind]
-        subset_indices = self.file.data_indices[ind]
-
-        try:
-            pre_cal = subset_data[
-                (np.arange(len(subset_data)) < subset_indices[0]) &
-                (subset_data["SWPVALID"] == 0)
-            ]
-        except:
-            pre_cal = None
-        data = subset_data[
-            (np.arange(len(subset_data)) >= subset_indices[0]) &
-            (np.arange(len(subset_data)) < subset_indices[1]) &
-            (subset_data["SWPVALID"] == 1)
-        ]
-        try:
-            post_cal = subset_data[
-                (np.arange(len(subset_data)) >= subset_indices[1]) &
-                (subset_data["SWPVALID"] == 0)
-            ]
-        except:
-            post_cal = None
-
-
-        def get_delta(cal, state):
-            cal_on_array = self.sdfits_to_array(cal[cal["CALSTATE"] == 1])
-            cal_on_params = self.rcr(cal_on_array)
-
-            if len(cal[cal["CALSTATE"] == 0]):
-                cal_off_array = self.sdfits_to_array(cal[cal["CALSTATE"] == 0])
-            # elif state == 0:
-            #     cal_off_array = self.sdfits_to_array(data[:5])
-            # elif state == 1:
-            #     cal_off_array = self.sdfits_to_array(data[-5:])
-            else:
-                return None
-
-            cal_off_params = self.rcr(cal_off_array)
-
-            time = (np.mean(cal_on_array[0]) + np.mean(cal_off_array[0])) / 2
-            if time < (cal_on_array[0][0] + cal_off_array[0][-1]) / 2:
-                time = (cal_on_array[0][0] + cal_off_array[0][-1]) / 2
-            elif time > (cal_on_array[0][-1] + cal_off_array[0][0]) / 2:
-                time = (cal_on_array[0][-1] + cal_off_array[0][0]) / 2
-
-            delta = (cal_on_params[1] * time + cal_on_params[0]) - (cal_off_params[1] * time + cal_off_params[0])
-
-            return delta, time
         
-
-        if pre_cal is not None:
-            try:
-                delta1, t1 = get_delta(pre_cal, 0)
-                self.file.gain_start.append([delta1, t1])
-            except:
-                self.file.gain_start.append(None)
-        else:
-            self.file.gain_start.append(None)
-
-        if post_cal is not None:
-            try:
-                delta2, t2 = get_delta(post_cal, 1)
-                self.file.gain_end.append([delta2, t2])
-            except:
-                self.file.gain_end.append(None)
-        else:
-            self.file.gain_end.append(None)
-
-
-        return
-
-
-    def gain_calibration(self):
-        '''
-        Carry out gain calibration for a given self.file.
-
-        Params:
-        file: Mike class file
-        '''
-
         for ind, i in enumerate(self.file.data):
-            self.compute_gain_deltas(ind)
+            subset_data = self.file.data[ind]
+            subset_indices = self.file.data_indices[ind]
 
+            try:
+                pre_cal = subset_data[
+                    (np.arange(len(subset_data)) < subset_indices[0]) &
+                    (subset_data["SWPVALID"] == 0)
+                ]
+                try:
+                    delta1, t1 = get_delta(pre_cal, 0)
+                    self.file.gain_start.append([delta1, t1])
+                except:
+                    self.file.gain_start.append(None)
+            except:
+                pre_cal = None
+                self.file.gain_start.append(None)
+                return
+
+            try:
+                post_cal = subset_data[
+                    (np.arange(len(subset_data)) >= subset_indices[1]) &
+                    (subset_data["SWPVALID"] == 0)
+                ]
+
+                try:
+                    delta2, t2 = get_delta(post_cal, 1)
+                    self.file.gain_end.append([delta2, t2])
+                except:
+                    self.file.gain_end.append(None)
+            except:
+                post_cal = None
+                self.file.gain_end.append(None)
+                return
+
+
+            def get_delta(cal):
+                cal_on_array = self.sdfits_to_array(cal[cal["CALSTATE"] == 1])
+                cal_on_params, cal_on_uncertainties = self.rcr(cal_on_array)
+
+                if len(cal[cal["CALSTATE"] == 0]):
+                    cal_off_array = self.sdfits_to_array(cal[cal["CALSTATE"] == 0])
+                else:
+                    return None
+
+                cal_off_params, cal_off_uncertainties = self.rcr(cal_off_array)
+
+                time = (np.mean(cal_on_array[0]) + np.mean(cal_off_array[0])) / 2
+                if time < (cal_on_array[0][0] + cal_off_array[0][-1]) / 2:
+                    time = (cal_on_array[0][0] + cal_off_array[0][-1]) / 2
+                elif time > (cal_on_array[0][-1] + cal_off_array[0][0]) / 2:
+                    time = (cal_on_array[0][-1] + cal_off_array[0][0]) / 2
+
+                delta = (cal_on_params[1] * time + cal_on_params[0]) - (cal_off_params[1] * time + cal_off_params[0])
+
+                return delta, time
+            
         return
-        
+
 
 if __name__ == "__main__":
     '''
     Test function to implement calibration.
     '''
 
-    file = Mike("C:/Users/starb/Downloads/0136375.fits")
+    file = Mike("C:/Users/starb/Downloads/0136376.fits")
     v = Val(file)
     # v.validate_primary_header()
     # v.validate_data()
@@ -204,7 +200,7 @@ if __name__ == "__main__":
     s.sort_data()
 
     c = Cal(file)
-    c.gain_calibration()
+    c.compute_gain_deltas()
     
     print(file.gain_start)
     print(file.gain_end)

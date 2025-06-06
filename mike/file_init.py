@@ -18,15 +18,21 @@ class Mike:
         validated_header: check whether header has been validated
         validated_data: check whether data has been validated
 
-        data_indices: list of arrays of shape (1,2)
+        data_indices: list of arrays of shape (1,2) (track)
             1st value is the first data point in the corresponding indexed data array
-            2nd value is the second data point in the corresponding indexed data array
+            2nd value is the first post calibration point in the corresponding indexed data array
+        data_indices: list of arrays of shape (1,2,3,4) (on/off)
+            1st value is the first on data point in the corresponding indexed data array
+            2nd value is the first transitioning point in the corresponding indexed data array
+            3rd value is the first off data point in the corresponding indexed data array
+            4th value is the first post calibration point in the corresponding indexed data array
         gain_start: list of arrays of shape (1,2)
             1st value is the gain delta for the given index
             2nd value is the time for the gain delta
         gain_end: list of arrays of shape (1,2)
             1st value is the gain delta for the given index
             2nd value is the time for the gain delta
+        continuum:
         '''
 
         try:
@@ -43,6 +49,7 @@ class Mike:
         self.validated_data = False
         self.Gain_Calibrated = False
 
+        self.labels = []
         self.data_indices = []
         self.gain_start = []
         self.gain_end = []
@@ -56,12 +63,18 @@ if __name__ == "__main__":
     Test function to test uploaded file.
     '''
 
-    file = Mike("C:/Users/starb/Downloads/0136375.fits")
+    file = Mike("C:/Users/starb/Downloads/0136870.fits")
 
     np.set_printoptions(threshold=100000)
 
     print(repr(file.header))
-    print(repr(file.data["ELEVATIO"]))
+    print(repr(file.data['OBSID']))
+
+    # file = Mike("C:/Users/starb/Downloads/0136869.fits")
+
+    # np.set_printoptions(threshold=100000)
+
+    # print(repr(file.header))
 
     fig, ax1 = plt.subplots()
 
@@ -83,6 +96,6 @@ if __name__ == "__main__":
     fig.legend(loc="upper right", bbox_to_anchor=(1, 1), bbox_transform=ax1.transAxes)
 
     # Save the figure
-    plt.title("Elevation and SWPVALID")
-    plt.savefig("Elevation.png", dpi=300, bbox_inches='tight')
+    plt.title("CALSTATE and SWPVALID")
+    plt.savefig("CALSTATE.png", dpi=300, bbox_inches='tight')
     plt.close()

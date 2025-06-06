@@ -26,17 +26,17 @@ class Sort:
 
         ifnums = np.unique(self.file.data["IFNUM"])
         plnums = np.unique(self.file.data["PLNUM"])
-        print(f"IFNUMs: {ifnums}, PLNUMs: {plnums}")
 
-        ind = 0
         data = []
+        labels = []
         for i in ifnums:
             for j in plnums:
                 subset_mask = (self.file.data["IFNUM"] == i) & (self.file.data["PLNUM"] == j)
                 subset_data = self.file.data[subset_mask]
                 data.append(subset_data)
-                ind += 1
+                labels.append(f'Feed{i + 1},Channel{j + 1}')
         self.file.data = data
+        self.labels = labels
 
         return 
 
@@ -52,9 +52,11 @@ class Sort:
         array: 1st index of data, 1st index of post calibration
         '''
 
+        # Initialize data start index and post calibration start index
         data_start_ind = None
         post_cal_start_ind = None
 
+        # Initialize calibration not started and pre calibration not completed
         cal_started = False
         pre_cal_complete = False
 
@@ -74,7 +76,7 @@ class Sort:
 
             if pre_cal_complete and point["SWPVALID"] == 0 and point["CALSTATE"] == 1:
                 break
-
+            
 
         if data_start_ind is None:
             for ind, point in enumerate(section):
