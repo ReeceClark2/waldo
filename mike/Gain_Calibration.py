@@ -12,6 +12,9 @@ import time
 from cal import Cal
 from val import Val
 from sort import Sort
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 
 
@@ -76,9 +79,7 @@ class gain_calibration:
                     delta = delta1 + (delta2 - delta1) * (data[0][idx] - time1) / (time2 - time1)
                     #add each calibration height to the calib_height list
                     data[1][idx] = (data[1][idx]/delta)
-                    # calib_height_data.append([data[0][idx], calib_height])
                 calib_height_data = (data)
-                #print("HEre", calib_height_data)
 
             # If gain_start is None and gain_end is not None, use gain_end for calibration
             elif file.gain_start[ind] is None and file.gain_end[ind] is not None:
@@ -88,11 +89,8 @@ class gain_calibration:
                 data = file.data[ind]
                 data = f.sdfits_to_array(data)
 
-                data[1] = data[1] / delta
-                calib_height_data = (data)
-                # for idx, i in enumerate(data[0]):
-                #     calib_height = data[1][idx]/delta
-                #     calib_height_data.append([data[0][idx], calib_height])
+                temp = data[1] / delta
+                calib_height_data = ([data[0], temp])
 
             # If gain_start is present but gain_end is not, use gain_start for calibration
             elif file.gain_start[ind] is not None and file.gain_end[ind] is None:
@@ -104,9 +102,6 @@ class gain_calibration:
 
                 data[1] = data[1] / delta
                 calib_height_data = (data)
-                # for idx, i in enumerate(data[0]):
-                #     calib_height = data[1][idx]/delta
-                #     calib_height_data.append([data[0][idx], calib_height])
 
             # If gain_start is present but gain_end is not, use gain_start for calibration
             elif file.gain_start[ind] is not None and file.gain_end[ind] is None:
@@ -120,9 +115,6 @@ class gain_calibration:
                 calib_height_data.append(data)
                 # If both gain_start and gain_end are None, just copy the original data
                 #But gotta turn it into a list of time, intensity lists
-                # calib_height_data = []
-                # for t, intensity in zip(data[0], data[1]):
-                #     calib_height_data.append([t, intensity])
                 
                 self.file.continuum.append(calib_height_data)
                 continue
@@ -136,7 +128,7 @@ class gain_calibration:
 if __name__ == "__main__":
     """Test function to implement continuum data handling."""
 
-    file = Mike("TrackingHighRes/0136376.fits")
+    file = Mike("C:\\Users\\anshm\\Downloads\\0126929.fits")
     Data = gain_calibration(file)
 
     v = Val(file)
@@ -151,4 +143,25 @@ if __name__ == "__main__":
     c.gain_calibration()
     Data.calib_Heights(file)
 
-    print(file.continuum[1][0][1])
+    # Assuming self.file.continuum is a list of arrays/lists where
+    # the first index is time and the second is intensity
+    for idx, data in enumerate(Data.file.continuum):
+        # If data is a tuple/list of two arrays: [time, intensity]
+        if isinstance(data, (list, tuple)) and len(data) == 2:
+            time = data[0]
+            intensity = data[1]
+        # If data is a numpy array with shape (2, N)
+        elif isinstance(data, np.ndarray) and data.shape[0] == 2:
+            time = data[0]
+            intensity = data[1]
+        else:
+            continue  # skip if format is unexpected
+
+        plt.plot(time, intensity, label=f'Channel {idx+1}')
+        plt.savefig("gain_calibrated_continuum.png")
+        plt.close()
+    plt.xlabel('Time')
+    plt.ylabel('Intensity')
+    plt.title('Gain Calibrated Continuum')
+    plt.legend()
+    plt.show()
