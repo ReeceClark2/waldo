@@ -135,23 +135,21 @@ class Cal:
                     (subset_data["SWPVALID"] == 0)
                 ]
                 try:
-                    delta1, t1 = get_delta(pre_cal, 0)
+                    delta1, t1 = get_delta(pre_cal)
                     self.file.gain_start.append([delta1, t1])
                 except:
                     self.file.gain_start.append(None)
             except:
                 pre_cal = None
                 self.file.gain_start.append(None)
-                return
 
             try:
                 post_cal = subset_data[
                     (np.arange(len(subset_data)) >= subset_indices[1]) &
                     (subset_data["SWPVALID"] == 0)
                 ]
-
                 try:
-                    delta2, t2 = get_delta(post_cal, 1)
+                    delta2, t2 = get_delta(post_cal)
                     self.file.gain_end.append([delta2, t2])
                 except:
                     self.file.gain_end.append(None)
@@ -196,8 +194,7 @@ if __name__ == "__main__":
     # v.validate_data()
     
     s = Sort(file)
-    s.split_slp_feed()
-    s.sort_data()
+    s.sort()
 
     c = Cal(file)
     c.compute_gain_deltas()
