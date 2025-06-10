@@ -15,7 +15,7 @@ import time
 from cal import Cal
 from val import Val
 from sort import Sort
-from gain_calibration import gain_calibration
+from gain_calibration import Gain_Calibration
 
 
 class Flux_Calibration:
