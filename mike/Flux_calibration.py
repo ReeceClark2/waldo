@@ -15,10 +15,10 @@ import time
 from cal import Cal
 from val import Val
 from sort import Sort
-from Gain_Calibration import gain_calibration
+from gain_calibration import gain_calibration
 
 
-class flux_calibration:
+class Flux_Calibration:
     def __init__(self, file, calfile):
         """
         Initialize the flux_Calibration object with a FITS file.
@@ -244,14 +244,14 @@ if __name__ == "__main__":
     cc = Cal(calfile)
     cc.compute_gain_deltas()
     
-    Data = gain_calibration(file)
+    Data = Gain_Calibration(file)
     Data.calib_Heights(file)
 
-    Datac = gain_calibration(calfile)
+    Datac = Gain_Calibration(calfile)
     Datac.calib_Heights(calfile)
     #print(file.continuum[0][1][1])
     #print(calfile.continuum[0][1][1])
-    FData = flux_calibration(file, calfile)
+    FData = Flux_Calibration(file, calfile)
     #print(np.shape(file.continuum))
     FData.calibflux(file, calfile)
     #print(file.continuum[0][1][1])

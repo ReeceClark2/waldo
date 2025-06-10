@@ -111,7 +111,7 @@ if __name__ == "__main__":
     s.get_startstop_channels()
 
     c = Cal(file)
-    c.gain_calibration()
+    c.compute_gain_deltas()
 
     spec = Spec(file)
     spec.make_spec()
