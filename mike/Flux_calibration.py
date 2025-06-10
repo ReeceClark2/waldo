@@ -39,7 +39,8 @@ class flux_calibration:
         param file: Mike class file of calibration source
 
         returns: parameters for equations 14 & 15 for particular calibration source
-        """        
+        """ 
+
         sources = {
             "CAS A": {
                 "t_ref": 2006.9, "t_0": 2005.64,
@@ -106,7 +107,7 @@ class flux_calibration:
         onmedian = np.median(ondata)
         offmedian = np.median(offdata)
 
-        calint.append(onmedian - offmedian) #calibration source flux in noise calibration units
+        calint.append(onmedian - offmedian) # Calibration source flux in noise calibration units
 
         return calint
      
@@ -177,35 +178,35 @@ class flux_calibration:
 
         sets Flux_Calibrated flag to True
         """
-        #list of median intensities of the calibration source
+        # List of median intensities of the calibration source
         calints = self.on_off_background_subtract(calfile)
 
-        #go through each data channel and calibrate the flux
+        # Go through each data channel and calibrate the flux
         calib_flux_data = []
 
         for i, feed in enumerate(file.continuum):
             
-            #get an array of the continuum data for source
+            # Get an array of the continuum data for source
             obsint = feed[1]
             
-            #get flux of calibration source in noise source units
+            # Get flux of calibration source in noise source units
             
             calint = calints[i]
             
-            #get flux of calibration source in janskys
+            # Get flux of calibration source in janskys
             date = datetime.fromisoformat(calfile.header["DATE-OBS"])
             calintj = self.radio_calibrate(1355, 1435, date, calfile.header["object"].upper())["flux"] 
-            #conversion factor
+            # Conversion factor
             j_conversion = calintj/calint  
-            #for the time array in the data find the calibrated height for each intensity
-            
+
+            # For the time array in the data find the calibrated height for each intensity
             new_intensities = [obsint * j_conversion for obsint in obsint]
             calib_flux_data.append(new_intensities)
                 
-        for i in range(len(file.continuum)):
-            old_continuum = file.continuum[i]
-            new_continuum = (old_continuum[0], calib_flux_data[i])
-            file.continuum[i] = new_continuum
+        for ind, i in enumerate(file.continuum):
+            old_continuum = file.continuum[ind]
+            new_continuum = (old_continuum[0], calib_flux_data[ind])
+            file.continuum[ind] = new_continuum
 
         self.file.Flux_Calibrated = True
 
@@ -238,10 +239,10 @@ if __name__ == "__main__":
     sc.sort_data()
     
     c = Cal(file)
-    c.gain_calibration()
+    c.compute_gain_deltas()
 
     cc = Cal(calfile)
-    cc.gain_calibration()
+    cc.compute_gain_deltas()
     
     Data = gain_calibration(file)
     Data.calib_Heights(file)
