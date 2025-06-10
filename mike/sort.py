@@ -58,6 +58,9 @@ class Sort:
         data_start_ind = None
         post_cal_start_ind = None
 
+        # Create counter for limiting 'false data'
+        counter = 0
+
         # Initialize calibration not started and pre calibration not completed
         cal_started = False
         pre_cal_complete = False
@@ -76,8 +79,15 @@ class Sort:
             else:
                 post_cal_start_ind = None
 
+            if pre_cal_complete and point["CALSTATE"] == 0 and point["SWPVALID"] == 1:
+                counter += 1
+
+            if counter <= 3 and point["CALSTATE"] == 1:
+                pre_cal_complete = False
+
             if pre_cal_complete and point["SWPVALID"] == 0 and point["CALSTATE"] == 1:
                 break
+
             
 
         if data_start_ind is None:
@@ -104,6 +114,7 @@ class Sort:
 
         return
     
+
     def get_startend_freqs(self):
         '''
         Get the start and stop frequencies for each channel in the data.
@@ -144,6 +155,7 @@ class Sort:
                 stop_f = c + (band / 2)
             freqs.append(np.array([start_f, stop_f]))
         self.file.freqs = freqs
+
     
     def get_startstop_channels(self):
         '''
@@ -179,6 +191,18 @@ class Sort:
             t.replace_column('DATA', np.array([row[channel1:channel2] for row in t['DATA']]))
             self.file.data[i] = t
 
+        return
+    
+
+    def sort(self):
+        self.split_slp_feed()
+        self.sort_data()
+        self.get_startend_freqs()
+        self.get_startstop_channels()
+
+        return
+
+
     def section_debug(self):
         '''
         Iterate through data and check the pre calibration, data, and post calibration of each.
@@ -193,20 +217,15 @@ class Sort:
             data = i[data_start_ind:post_cal_start_ind]
             post_cal = i[post_cal_start_ind:]
 
+            print(data_start_ind, post_cal_start_ind)
             print(len(pre_cal),len(data),len(post_cal))
 
 
 if __name__ == "__main__":
-    file = Mike("TrackingHighRes/0136376.fits")
+    file = Mike("C:/Users/starb/Downloads/0136870.fits")
 
     np.set_printoptions(threshold=100000)
 
     s = Sort(file)
-    s.split_slp_feed()
-    s.sort_data()
+    s.sort()
     s.section_debug()
-    s.get_startend_freqs()
-    s.get_startstop_channels()
-    
-    print(file.data[0]['CALSTATE'])
-    print(file.data[0]['SWPVALID'])

@@ -25,42 +25,6 @@ class Weather:
         '''
 
         self.file = file
-        
-        self.site_elevation = self.file.header['SITEELEV'] / 1000
-        
-        self.oxygen_data = np.loadtxt('tables/oxygen_coefficients.txt')
-        self.oxygen_frequencies = self.oxygen_data[:, 0]
-        self.oxygen_coefficients = self.oxygen_data[:, 1:5]
-
-        self.water_vapor_data = np.loadtxt('tables/water_vapor_coefficients.txt')
-        self.water_vapor_frequencies = self.water_vapor_data[:, 0]
-        self.water_vapor_coefficients = self.water_vapor_data[:, 1:5]
-
-        pass
-
-
-    def debye_spec(self, f, p, T):
-        """
-        Compute the imaginary part of the oxygen Debye spectrum N''_D(f).
-
-        Parameters:
-            f : frequency in GHz (scalar or array)
-            p : total pressure in hPa
-            T : temperature in Kelvin
-
-        Returns:
-            N_imag : imaginary part of the refractivity (dimensionless)
-        """
-
-        theta = 300 / T
-        d = 5.6 + 3.75 * theta
-
-        first_term = 6.14e-5 / (d * (1 + (f / d) ** 2))
-        second_term = (1.4e-12 * p * theta ** 1.5) / (1 + 1.9e-5 * f ** 1.5)
-
-        N_imag = f * p * theta ** 2 * (first_term + second_term)
-
-        return N_imag
 
 
     def water_vapor_density(self, P, T_K, RH):
@@ -77,7 +41,7 @@ class Weather:
         rho_wv = 216.7 * e / T_K  # g/m³
 
         return rho_wv
-
+    
 
     def estimate_iwv(self, T_K, RH, H=2000):
         """
@@ -94,166 +58,63 @@ class Weather:
         iwv = (rho_wv * H) / 1000  # mm or kg/m²
 
         return iwv
-
-
-    def get_coefficients(self, f, medium):
-        if medium == 'O':
-            aO = np.interp(f, self.oxygen_frequencies, self.oxygen_coefficients[:, 0])
-            bO = np.interp(f, self.oxygen_frequencies, self.oxygen_coefficients[:, 1])
-            cO = np.interp(f, self.oxygen_frequencies, self.oxygen_coefficients[:, 2])
-            dO = np.interp(f, self.oxygen_frequencies, self.oxygen_coefficients[:, 3])
-            return aO, bO, cO, dO
-        elif medium == 'V':
-            aV = np.interp(f, self.water_vapor_frequencies, self.water_vapor_coefficients[:, 0])
-            bV = np.interp(f, self.water_vapor_frequencies, self.water_vapor_coefficients[:, 1])
-            cV = np.interp(f, self.water_vapor_frequencies, self.water_vapor_coefficients[:, 2])
-            dV = np.interp(f, self.water_vapor_frequencies, self.water_vapor_coefficients[:, 3])
-            return aV, bV, cV, dV
-        else:
-            return
-
-
-    def oxygen_attenuation(self, f, p, T, rho, theta):
-        gamma = 0.1820 * self.debye_spec(f, p, T)
-
-        aO, bO, cO, dO = self.get_coefficients(f, 'O')
-
-        hO = aO + bO * T + cO * p + dO * rho
-
-        AO = (gamma * hO / np.sin(theta)) * ((8 - self.site_elevation) / 8)
-
-        return AO
     
 
-    def water_vapor_attenuation(self, f, p, T, rho, theta, rh):
-        iwv = self.estimate_iwv(T, rh)
+    def compute_gaseous_attenuation(self, f, P, T, rh, site_elevation, theta_rad):
+        # Compute water vapor density (assumed to be in g/m^3)
+        rho = self.water_vapor_density(P, T, rh)
 
-        aV, bV, cV, dV = self.get_coefficients(f, 'V')
-
-        kV = aV + bV * rho + cV * T + dV * p
-
-        AW = (kV * iwv / np.sin(theta)) * ((2 - self.site_elevation) / 2)
-
-        return AW
-
-
-    def total_attenuation(self):
-        # Frequency range (GHz)
-        f = np.linspace(1, 12, 100) * u.GHz
-
-        # Environmental parameters
-        p = self.file.data[0][0]['PRESSURE'] * 1.33322 * u.hPa  # Convert mmHg to hPa
-        T = 280 * u.K
-        rh = 100  # Relative humidity %
-        theta_rad = np.radians(40)
-        site_elevation = 23 * u.m
-
-        # Compute water vapor density
-        rho = self.water_vapor_density(p.value, T.value, rh) * u.g / u.m**3
-
-        # Path lengths adjusted for elevation
-        H_o = (8 * u.km - site_elevation).to(u.km)
-        H_w = max((2 * u.km - site_elevation).to(u.km).value, 0.1) * u.km  # prevent negative or zero
+        # Path lengths adjusted for elevation (assumed in km)
+        H_o = (8 - site_elevation / 1000)  
+        H_w = max((2 - site_elevation / 1000), 0.1) 
 
         # Slant path factors
         airmass = 1 / np.sin(theta_rad)
-        L_o = H_o * airmass
-        L_w = H_w * airmass
+        L_o = H_o * airmass  # Path length for oxygen
+        L_w = H_w * airmass  # Path length for water vapor
 
-        # Specific attenuation (dB/km)
-        gamma_o = itur.models.itu676.gamma0_exact(f, p, rho, T)
-        gamma_w = itur.models.itu676.gammaw_exact(f, p, rho, T)
+        # Method 2: Summing individual oxygen and water vapor attenuation
+        gamma_o = itur.models.itu676.gamma0_exact(f, P, rho, T)
+        gamma_w = itur.models.itu676.gammaw_exact(f, P, rho, T)
 
-        # Total attenuation (dB)
-        A_o = gamma_o * L_o
-        A_w = gamma_w * L_w
-        A_total = (A_o + A_w).to(u.dB).value
+        A_o = gamma_o.value * L_o  # Oxygen attenuation in dB
+        A_w = gamma_w.value * L_w  # Water vapor attenuation in dB
+        A = A_o + A_w  # Total attenuation from individual gases in dB
 
-        # Convert to transmission %
-        transmission = 10 ** (-A_total / 10) * 100
+        return A
 
-        # Plot
-        plt.plot(f.value, transmission)
-        plt.xlabel("Frequency (GHz)")
-        plt.ylabel("Transmission (%)")
-        plt.title("Transmission vs Frequency")
-        plt.grid(True)
-        plt.savefig('thing')
+
+    def total_attenuation(self):
+        for ind1, i in enumerate(self.file.data):
+            subset_data = self.file.data[ind1]
+
+            P = subset_data['PRESSURE'] * 1.33322 
+            T = subset_data['TAMBIENT'] + 273.15
+            rh = subset_data['HUMIDITY']   
+            theta_rad = np.radians(subset_data['ELEVATIO'])
+            f = np.linspace(self.file.freqs[ind1][0], self.file.freqs[ind1][1], len(subset_data['DATA'][0]))
+            site_elevation = self.file.header['SITEELEV'] / 1000
+
+            for ind2, j in enumerate(subset_data):
+                A_gas = self.compute_gaseous_attenuation(f, P, T, rh, site_elevation, theta_rad[ind2])
+
+                transmission = 1 - 10**(-A_gas / 10)
+
+                old_data = subset_data['DATA'][ind2][40]
+                subset_data['DATA'][ind2] = subset_data['DATA'][ind2] * transmission
+                new_data = subset_data['DATA'][ind2][40]
+                print(transmission[40], new_data, old_data, abs(new_data - old_data), len(transmission), len(subset_data['DATA'][ind2]))
+
+
+        self.compute_rain_attenuation()
+        self.compute_scintillation_attenuation()
+        self.compute_cloud_attenuation()
+
+        
+        return
+
 
             
-
-
-    def total_attenuation_in_house(self):
-        for subset_data in self.file.data:
-            for point in subset_data:
-                intensities = point['DATA']
-
-                f = 8
-                p = self.file.data[0][0]['PRESSURE'] * 1.33322 # Convert to hPa
-                T = self.file.data[0][0]['TAMBIENT'] + 273.15 # C
-                rh = self.file.data[0][0]['HUMIDITY']
-
-                rho = self.water_vapor_density(p, T, rh)
-                theta = np.radians(self.file.data[0][0]['ELEVATIO'])
-
-                AO = self.oxygen_attenuation(f, p, T, rho, theta)
-                AW = self.water_vapor_attenuation(f, p, T, rho, theta, rh)
-                print("AO:", AO, "  AW:", AW)
-
-                A = AO + AW
-                
-                trans = 10 ** (-A / 10)
-
-                print(trans)
-
-
-    def total_attenuation_plotting(self):
-        # Normalize over the full range of θ (deg), T (K), RH (%)
-        norm = Normalize(vmin=30 + 266 + 0, vmax=90 + 306 + 95)
-        cmap = cm.viridis
-
-        angles = np.linspace(30, 90, 2)      # elevation in degrees
-        temps = np.linspace(266, 306, 2)     # temperature in K
-        rhs = np.linspace(0, 95, 2)          # relative humidity in %
-
-        for theta_deg in angles:
-            theta_rad = np.radians(theta_deg)
-            for T in temps:
-                for rh in rhs:
-                    f = np.linspace(1, 8, 100)
-                    p = self.file.data[0][0]['PRESSURE'] * 1.33322
-
-                    rho = self.water_vapor_density(p, T, rh)
-                    AO = self.oxygen_attenuation(f, p, T, rho, theta_rad)
-                    AW = self.water_vapor_attenuation(f, p, T, rho, theta_rad, rh)
-
-                    A = AO + AW
-                    # Compute specific attenuations
-                    gamma_o = itur.models.itu676.gamma0_exact(f, p, rho, T) * (8 / np.sin(theta_rad)) # Oxygen
-                    gamma_w = itur.models.itu676.gammaw_exact(f, p, rho, T) * (2 / np.sin(theta_rad))  # Water vapor
-
-                    # Total specific attenuation
-                    gamma_total = (gamma_o + gamma_w).value
-                    
-                    trans = (10 ** (-A / 10))
-                    trans_itur = (10 ** (-gamma_total / 10))
-
-                    # Color is determined by combined T + RH + θ
-                    scalar = T + rh + theta_deg
-                    color_value = norm(scalar)
-                    plt.plot(f, np.array(trans) * 100, color='blue',
-                            label=f'In-House')
-                    plt.plot(f, np.array(trans_itur) * 100, color='red',
-                            label=f'ITUR')
-
-            plt.xlabel('Frequency (GHz)')
-            plt.ylabel('Attenuation')
-            plt.title(f'Attenuation ITUR vs In-House Models')
-            # plt.legend(fontsize='small')
-            plt.savefig(f'thing.png', dpi=300)
-            plt.close()
-
-
 if __name__ == "__main__":
     """Test function to implement continuum data handling."""
 
@@ -264,8 +125,7 @@ if __name__ == "__main__":
     # v.validate_data()
 
     s = Sort(file)
-    s.split_slp_feed()
-    s.sort_data()
+    s.sort()
 
     w = Weather(file)
     w.total_attenuation()

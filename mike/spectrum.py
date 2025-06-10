@@ -81,7 +81,7 @@ class Spec:
 
 
             # Plot the spectrum
-            plt.plot(frequencies, result, label=f"{pol} {feednum+1}")
+            plt.plot(frequencies, result, label=f"{self.file.labels[i]}")
             # Check if there are any more entries with the same feednum left
             feeds_left = any(np.unique(self.file.data[j]["IFNUM"]) == feednum for j in range(i + 1, len(self.file.data)))
             if not feeds_left:

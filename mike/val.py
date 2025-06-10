@@ -132,53 +132,50 @@ class Val:
             3) convert datetime fields to datetime objects
         '''
 
-        try:
-            with fits.open(self.file.file_path) as hdul:
-                self.dataH = hdul[1].header
-                self.data = Table(hdul[1].data)
+        self.check_values
 
-        except Exception as e:
-            raise MyException(f"Error reading data from FITS file: {e}")
+        for column in self.data.colnames:
+            # Check that column conforms to correct type
+            self.match_types(column)
 
-        # Check if the data has bad values (NaN or negative)
-        Data = np.ma.array(self.data["DATA"])
-        # Check each array in Data for NaN or 0s and create a masked array
-        mask = np.isnan(Data) | (Data < 0)
-        if np.any(mask):
-            warnings.warn("🚫 Data contains negative or NaN values.", stacklevel=2)
-        self.data["DATA"] = np.ma.masked_array(Data, mask=mask)
-
-        # Check if the data types are correct and converts the time columns to be datetime or floats
-        self.validate_types()
+            # Convert the time columns to datetime
+            self.convert_to_datetime(column)
+            
+            # Check if the numeric columns have weird numbers
+            self.check_numbers(column)
 
         self.file.validated_data = True
 
         return
 
 
-    def validate_types(self):
-        '''Checks that all values in a given column are the correct type.'''
+    def check_values(self):
+        # Check if the data has bad values (NaN or negative)
+        Data = np.ma.array(self.data["DATA"])
 
-        #check everry column
-        for column in self.data.colnames:
-            self.match_types(column)
-            self.convert_to_datetime(column)
-            #convert the time columns to datetime
-            
-            #check if the numeric columns have weird numbers
-            self.check_numbers(column)
+        # Check each array in Data for NaN or 0s and create a masked array
+        mask = np.isnan(Data) | (Data < 0)
+        if np.any(mask):
+            warnings.warn("🚫 Data contains negative or NaN values.", stacklevel=2)
+
+        self.data["DATA"] = np.ma.masked_array(Data, mask=mask)
+
+        return
 
 
     def match_types(self, column):
-        '''Make sure all the column types match the data types of the values.'''
+        '''
+        Make sure all the column types match the data types of the values.
+        '''
 
         column_data = self.data[column]
-        #find how many unique types there are in the column
+
+        # Find how many unique types there are in the column
         unique_types = set(type(value) for value in self.data[column])
         
-        # if there are more than one type of value in a column, do smth about it
+        # If there are more than one type of value in a column then correct it
         if len(unique_types) > 1:
-            # try to convert the values to the most common type
+            # Try to convert the values to the most common type
             common_type = max(unique_types, key=lambda t: sum(isinstance(value, t) for value in self.data[column]))
             for i, value in enumerate(self.data[column]):
                 if not isinstance(value, common_type):
@@ -191,43 +188,44 @@ class Val:
                         self.data[column].mask[i] = True
             print(f"🚫 Column '{column}' contains mixed data types: {unique_types}.")
         else:
-            # otherwise convert the column to the common type
-            common_type = unique_types.pop()
+            # Otherwise convert the column to the common type
+            common_type = unique_types[0]
             try:
-
                 if common_type is str:
-                    # automatic conversion to str doesn't work some of the time so we need to try UTF-8 first
+                    # Automatic conversion to str doesn't work some of the time so we need to try UTF-8 first
                     if column_data.dtype.char == 'S':  # Check if it's a byte string
                         self.data[column] = np.char.decode(self.data[column], encoding='utf-8', errors='replace')
                     else:
                         self.data[column] = np.array(self.data[column], dtype=str)
 
-                # make sure the arrays in the column are all floats
+                # Make sure the arrays in the column are all floats
                 elif common_type is np.ndarray:
                     if not all(isinstance(float(item), float) for subarray in column_data for item in subarray):
-                        #if not try to make them floats, otherwise raise an error
+                        # If not try to make them floats, otherwise raise an error
                         for subarray in column_data:
-                            for idx, item in enumerate(subarray):
+                            for ind, item in enumerate(subarray):
                                 try:
                                     float(item)
                                 except Exception:
                                     raise TypeError(f"🚫 Column '{column}' contains arrays with non-float elements: {item}")
 
-                # otherwise just convert the column to the common type
+                # Otherwise just convert the column to the common type
                 else:
                     self.data[column] = self.data[column].astype(common_type)
 
             except Exception as e:
-                #if that all fails, raise an error
+                # If that all fails, raise an error
                 MyException(f"⚠️ Failed to change column '{column}' data type to {common_type}: {e}")
 
         return
     
 
     def convert_to_datetime(self, column):
-        '''Convert the dates and times to datetime objects from the date time library'''
+        '''
+        Convert the dates and times to datetime objects from the date time library
+        '''
         
-        #check if the column name contains any of the keywords
+        # Check if the column name contains any of the keywords
         if any(keyword in column.upper() for keyword in ["DATE", "TIME", "DURATION", "EXPOSURE", "MJD", "UTC", "UTSECS"]) or column.upper() == "LST":
                 try:
                     # Attempt to convert to datetime object
@@ -236,7 +234,7 @@ class Val:
                 except (ValueError, TypeError):
                     try:
                         # If conversion fails, convert to seconds (float)
-                      self.data[column] = Column(self.data[column].astype(float), dtype='f8')
+                        self.data[column] = Column(self.data[column].astype(float), dtype='f8')
 
                     except ValueError:
                         try:
@@ -245,8 +243,8 @@ class Val:
                         except Exception:
                             raise MyException(f"⚠️ Failed to convert value '{self.data[column]}' in column '{column}' to datetime or seconds.")
                 
-
         return
+
 
     def check_numbers(self, column):
         '''
