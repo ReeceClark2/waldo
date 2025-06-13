@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime
+from astropy.time import Time
 from tabnanny import check
 from scipy.ndimage import label, median_filter
 import numpy as np
@@ -310,9 +311,9 @@ class Sort:
                 if feednum not in feeds:
                     continue
 
-                times = [datetime.fromisoformat(t) for t in c["DATE-OBS"]]
-                t0 = datetime.fromisoformat(self.file.header["DATE"])
-                time_rel = [(t - t0).total_seconds() for t in times]
+                times = Time(c["DATE-OBS"], format="isot")
+                t0 = Time(self.file.header["DATE"], format="isot")
+                time_rel = (times - t0).sec  # Time delta in seconds
 
                 new_table= []
                 if type == "keep":
