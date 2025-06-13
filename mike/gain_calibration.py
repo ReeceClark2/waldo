@@ -175,7 +175,7 @@ class Gain_Cal:
 
             try:
                 post_cal = subset_data[
-                    (np.arange(len(subset_data)) >= subset_indices[1]) &
+                    (np.arange(len(subset_data)) >= subset_indices[-1]) &
                     (subset_data["SWPVALID"] == 0)
                 ]
                 delta2, t2 = get_delta(post_cal)
