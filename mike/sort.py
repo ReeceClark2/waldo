@@ -104,6 +104,7 @@ class Sort:
         if self.file.header["OBSMODE"] == "onoff":
             for ind, point in enumerate(section):
                 target = b'onoff:off'
+
                 if target in point["OBSMODE"]: 
                     offstart = ind
                     indicies = np.array([data_start_ind, offstart-1, offstart, post_cal_start_ind])   
@@ -165,12 +166,12 @@ class Sort:
                             # Otherwise skip it
                             continue
 
-        feeds = len(np.unique([d['IFNUM'] for d in self.file.data]))
+        channels = len(np.unique([d['PLNUM'] for d in self.file.data]))
         for c in center:
             start_f = c - (band / 2)
             stop_f = c + (band / 2)
             
-            for _ in range(feeds):
+            for _ in range(channels):
                 freqs.append(np.array([start_f, stop_f]))
         self.file.freqs = freqs
 
@@ -349,4 +350,3 @@ if __name__ == "__main__":
     s.sort()
     s.section_debug()
 
-    s.user_cuts
