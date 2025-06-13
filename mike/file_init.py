@@ -18,10 +18,10 @@ class Mike:
         validated_header: check whether header has been validated
         validated_data: check whether data has been validated
 
-        data_indices: list of arrays of shape (1,2) (track)
+        data_indicies: list of arrays of shape (1,2) (track)
             1st value is the first data point in the corresponding indexed data array
             2nd value is the first post calibration point in the corresponding indexed data array
-        data_indices: list of arrays of shape (1,2,3,4) (on/off)
+        data_indicies: list of arrays of shape (1,2,3,4) (on/off)
             1st value is the first on data point in the corresponding indexed data array
             2nd value is the first transitioning point in the corresponding indexed data array
             3rd value is the first off data point in the corresponding indexed data array
@@ -47,17 +47,18 @@ class Mike:
 
         self.validated_header = False
         self.validated_data = False
-        self.Gain_Calibrated = False
+        self.gain_calibrated = False
+        self.flux_calibrated = False
 
         self.labels = []
-        self.data_indices = []
+        self.data_indicies = []
         self.gain_start = []
         self.gain_end = []
 
+        self.freqs = []
+
         self.continuum = []
         self.spectrum = []
-
-        self.freqs = []
 
 
 if __name__ == "__main__":

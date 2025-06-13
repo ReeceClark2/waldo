@@ -84,7 +84,7 @@ class Weather:
         return A
 
 
-    def total_attenuation(self):
+    def weather_correction(self):
         for ind1, i in enumerate(self.file.data):
             subset_data = self.file.data[ind1]
 
@@ -92,24 +92,20 @@ class Weather:
             T = subset_data['TAMBIENT'] + 273.15
             rh = subset_data['HUMIDITY']   
             theta_rad = np.radians(subset_data['ELEVATIO'])
+            
             f = np.linspace(self.file.freqs[ind1][0], self.file.freqs[ind1][1], len(subset_data['DATA'][0]))
             site_elevation = self.file.header['SITEELEV'] / 1000
 
             for ind2, j in enumerate(subset_data):
-                A_gas = self.compute_gaseous_attenuation(f, P, T, rh, site_elevation, theta_rad[ind2])
+                A_gas = self.compute_gaseous_attenuation(f, P[ind2], T[ind2], rh[ind2], site_elevation, theta_rad[ind2])
+
+                # self.compute_rain_attenuation()
+                # self.compute_scintillation_attenuation()
+                # self.compute_cloud_attenuation()
 
                 transmission = 1 - 10**(-A_gas / 10)
 
-                old_data = subset_data['DATA'][ind2][40]
                 subset_data['DATA'][ind2] = subset_data['DATA'][ind2] * transmission
-                new_data = subset_data['DATA'][ind2][40]
-                print(transmission[40], new_data, old_data, abs(new_data - old_data), len(transmission), len(subset_data['DATA'][ind2]))
-
-
-        self.compute_rain_attenuation()
-        self.compute_scintillation_attenuation()
-        self.compute_cloud_attenuation()
-
         
         return
 
@@ -128,4 +124,6 @@ if __name__ == "__main__":
     s.sort()
 
     w = Weather(file)
-    w.total_attenuation()
+    print(file.data[0]['DATA'][0])
+    w.weather_correction()
+    print(file.data[0]['DATA'][0])

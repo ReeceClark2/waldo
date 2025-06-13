@@ -74,14 +74,9 @@ class Cal:
         r.performBulkRejection(y)
 
         indices = r.result.indices
-        print('\nold x: ', x)
-        plt.plot(x, 'red')
+
         x = x[indices]
         y = y[indices]
-        print('new x: ', x)
-        plt.plot(x, 'green')
-        plt.savefig('rejection')
-        plt.close()
 
         best_fit_parameters = model.result.parameters
         
@@ -127,7 +122,7 @@ class Cal:
         
         for ind, i in enumerate(self.file.data):
             subset_data = self.file.data[ind]
-            subset_indices = self.file.data_indices[ind]
+            subset_indices = self.file.data_indicies[ind]
 
             try:
                 pre_cal = subset_data[

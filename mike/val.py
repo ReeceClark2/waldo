@@ -132,7 +132,15 @@ class Val:
             3) convert datetime fields to datetime objects
         '''
 
-        self.check_values
+        try:
+            with fits.open(self.file.file_path) as hdul:
+                self.dataH = hdul[1].header
+                self.data = Table(hdul[1].data)
+
+        except Exception as e:
+            raise MyException(f"Error reading data from FITS file: {e}")
+
+        self.check_values()
 
         for column in self.data.colnames:
             # Check that column conforms to correct type
@@ -189,7 +197,7 @@ class Val:
             print(f"🚫 Column '{column}' contains mixed data types: {unique_types}.")
         else:
             # Otherwise convert the column to the common type
-            common_type = unique_types[0]
+            common_type = list(unique_types)[0]
             try:
                 if common_type is str:
                     # Automatic conversion to str doesn't work some of the time so we need to try UTF-8 first

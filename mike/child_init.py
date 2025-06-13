@@ -6,7 +6,7 @@ class Sully(Mike):
         super().__init__(file.file_path)
         self.data = copy.deepcopy(file.data)
         # Copy other attributes as needed
-        self.data_indices = copy.deepcopy(file.data_indices)
+        self.data_indicies = copy.deepcopy(file.data_indicies)
         self.freqs = copy.deepcopy(file.freqs)
 
         #TO be saved

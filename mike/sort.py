@@ -39,7 +39,7 @@ class Sort:
                 data.append(subset_data)
                 labels.append(f'Feed{i + 1},Channel{j + 1}')
         self.file.data = data
-        self.labels = labels
+        self.file.labels = labels
 
         return 
 
@@ -89,7 +89,6 @@ class Sort:
             if pre_cal_complete and point["SWPVALID"] == 0 and point["CALSTATE"] == 1:
                 break
 
-            
 
         if data_start_ind is None:
             for ind, point in enumerate(section):
@@ -101,17 +100,29 @@ class Sort:
                     post_cal_start_ind = ind
                     break
 
-        return np.array([data_start_ind, post_cal_start_ind])
+
+        if self.file.header["OBSMODE"] == "onoff":
+            for ind, point in enumerate(section):
+                target = b'onoff:off'
+                if target in point["OBSMODE"]: 
+                    offstart = ind
+                    indicies = np.array([data_start_ind, offstart-1, offstart, post_cal_start_ind])   
+                    break
+                            
+        else: 
+             indicies = np.array([data_start_ind, post_cal_start_ind])
+
+        return indicies
 
 
     def sort_data(self):
         '''
-        Iterate through each channel of data and append to data_indices.
+        Iterate through each channel of data and append to data_indicies.
         '''
 
         for i in self.file.data:
             result = self.divide_section(i)
-            self.file.data_indices.append(result)
+            self.file.data_indicies.append(result)
 
         return
     
@@ -123,37 +134,44 @@ class Sort:
         returns: populates the file's freqs field with start and stop frequencies
         '''
         freqs = []
-            #scour the header for the bandwidth and center frequencies
+        
+        # Scour the header for the bandwidth and center frequencies
         for key, value in self.file.header.items():
-            #bandwidth
+            # Bandwidth
             if key == ("OBSBW"):
                 band = value
-            #lowres center frequency
+
+            # Lowres center frequency
             elif key == ("OBSFREQ"):
                 center = [value]
-            #HIRES bands center frequencies
+
+            # HIRES bands center frequencies
             elif key == ("HISTORY"):
-                #if HIRES BANDS exist replace center with the HIRES center frequencies
+                # If HIRES BANDS exist replace center with the HIRES center frequencies
                 if value.startswith("HIRES bands"):
                     # Extract all integers from the string
                     value = value.replace(",", " ").strip()
                     value = value.split(" ")
                     center = []
-                    #split the value into individual words and numbers
+
+                    # Split the value into individual words and numbers
                     for k in value:
                         k = str(k).strip()
                         try:
-                            #if it's a float add it to the center list
+                            # If it's a float add it to the center list
                             k = float(k)
                             center.append(k)
                         except ValueError:
-                            #otherwise skip it
+                            # Otherwise skip it
                             continue
-                # start/stop channels
+
+        feeds = len(np.unique([d['IFNUM'] for d in self.file.data]))
         for c in center:
             start_f = c - (band / 2)
             stop_f = c + (band / 2)
-            freqs.append(np.array([start_f, stop_f]))
+            
+            for _ in range(feeds):
+                freqs.append(np.array([start_f, stop_f]))
         self.file.freqs = freqs
 
     
@@ -165,27 +183,30 @@ class Sort:
         '''
 
         for i in range(len(self.file.data)):
-            #search through the header 
+            # Search through the header 
             for key, value in self.file.header.items():
                 if key == ("HISTORY"):
                     if value.startswith("START,STOP"):
                         # Extract all integers from the string
                         value = value.replace(",", " ").strip()
                         value = value.split(" ")
-                        #split the value into individual words and numbers
+                        # Split the value into individual words and numbers
+
                         channels = []
                         for k in value:
                             k = str(k).strip()
                             try:
-                                #if it's an integer add it to the channels list
+                                # If it's an integer add it to the channels list
                                 k = int(k)
                                 channels.append(k)
                             except ValueError:
-                                #if it can't become a integer, skip it
+                                # If it can't become a integer, skip it
                                 continue
+                        
                         # Remove all string type characters from the channels list
                         channel1 = int(channels[0])
                         channel2 = int(channels[1])
+            
             # Cut the DATA column to only include the channels in the start and stop channels
             t = Table(self.file.data[i])
             t.replace_column('DATA', np.array([row[channel1:channel2] for row in t['DATA']]))
@@ -209,7 +230,7 @@ class Sort:
         '''
 
         for ind, i in enumerate(self.file.data):
-            current_indices = self.file.data_indices[ind]
+            current_indices = self.file.data_indicies[ind]
             data_start_ind = current_indices[0]
             post_cal_start_ind = current_indices[1]
 
@@ -221,12 +242,14 @@ class Sort:
             print(len(pre_cal),len(data),len(post_cal))
             print (data_start_ind, post_cal_start_ind)
 
+
     def back_to_original_data(self, original_data):
         '''
         Restore the original data from the modified data.
         '''
         for i in range(len(self.file.data)):
             self.file.data[i] = original_data[i]
+
 
     def user_cuts(self, indices, axis, type, feeds=[]):
         '''
@@ -282,6 +305,7 @@ class Sort:
                 if feednum.size != 1:
                     raise MyException("Data is not split by feed. Please run split_slp_feed() first.")
                 feednum = feednum[0]
+                
                 if feednum not in feeds:
                     continue
 
@@ -304,13 +328,16 @@ class Sort:
                                 mask[j] = False
                     new_table = [c[j] for j in range(len(time_rel)) if mask[j]]
                     # Convert new_table to an astropy Table only if it's not empty
+
                 if new_table:
                     self.file.data[i] = Table(rows=new_table, names=c.colnames)
                 else:
                     # If no rows matched, create an empty table with the same columns
                     self.file.data[i] = Table(names=c.colnames)
+
         # Return the original data for restoration later
         return original_data
+
 
 if __name__ == "__main__":
     file = Mike("C:/Users/starb/Downloads/0136870.fits")
@@ -321,8 +348,5 @@ if __name__ == "__main__":
     s = Sort(file)
     s.sort()
     s.section_debug()
-    s.get_startend_freqs()
-    s.get_startstop_channels()
-    
-    print(file.data[0]['CALSTATE'])
-    print(file.data[0]['SWPVALID'])
+
+    s.user_cuts
